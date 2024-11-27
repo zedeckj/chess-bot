@@ -29,7 +29,7 @@ class EvaluatorLoss(nn.Module):
         self.ce_loss = nn.CrossEntropyLoss()
 
 
-    def forward(self, evaluations : torch.Tensor, best_move: int, for_white : bool):
+    def forward(self, evaluations : torch.Tensor):
         if for_white:
             evaluations = self.softmax(evaluations)
         else:

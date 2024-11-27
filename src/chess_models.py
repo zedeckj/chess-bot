@@ -68,3 +68,4 @@ class ProductionAutoencoder(BoardAutoencoder):
         super().__init__()
         assert(ProductionAutoencoder.MODEL_DIR in os.listdir("models"))
         self.load_state_dict(torch.load(f"models/{ProductionAutoencoder.MODEL_DIR}", weights_only=True))
+
