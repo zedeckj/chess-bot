@@ -66,6 +66,7 @@ class TensorBoardUtilV4():
         out_list[3] = board.has_queenside_castling_rights(chess.BLACK)
         return out_list
     
+    
 
     @staticmethod
     def tensorToPieceTensors(tensor : torch.Tensor) -> torch.Tensor:
@@ -180,13 +181,65 @@ class TensorBoardUtilV4():
         assert(list(tensor_out.shape) == [1,TensorBoardUtilV4.SIZE])
         return tensor_out
     
+    @staticmethod 
+    def _castlingFENtoBoolList(castling_fen : str) -> list[bool]:
+        out_list = [False for _ in range(4)]
+        out_list[0] = "K" in castling_fen
+        out_list[1] = "Q" in castling_fen
+        out_list[2] = "k" in castling_fen
+        out_list[3] = "q" in castling_fen
+        return out_list
+
+
+    @staticmethod
+    def _square_to_index(square : str) -> Optional[int]:
+        if square == "-":
+            return None
+        square = square.casefold()
+        files = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        return (int(square[1]) - 1) * 8 + files.index(square[0])
+
+    @staticmethod
+    def fromFEN(fen : str) -> torch.Tensor:
+        pieces_str, turn, castling, en_passant, half_move, full_move = fen.split(" ")
+        rows = pieces_str.split("/")
+        pieces : list[Optional[chess.Piece]] = []
+        rows.reverse()
+        for row in rows:
+            for c in row:
+                l = c.casefold()
+                type = None
+                if l == "p":
+                    type = chess.PAWN
+                elif l == "n":
+                    type = chess.KNIGHT
+                elif l == "b":
+                    type = chess.BISHOP
+                elif l == "r":
+                    type = chess.ROOK
+                elif l == "q":
+                    type = chess.QUEEN
+                elif l == "k":
+                    type = chess.KING
+                else:
+                    pieces.extend(None for _ in range(int(c)))
+                    continue
+                color = chess.BLACK if c == l else chess.WHITE
+                pieces.append(chess.Piece(type, color))
+
+        total_bool_list = []
+        for piece in pieces:
+            total_bool_list.extend(TensorBoardUtilV4._pieceToBoolList(piece))
+        total_bool_list.append(turn == "w")
+        total_bool_list.extend(TensorBoardUtilV4._castlingFENtoBoolList(castling))
+        total_bool_list.extend(TensorBoardUtilV4._enpassantToBoolList(TensorBoardUtilV4._square_to_index(en_passant)))
+        out_list = [float(b) for b in total_bool_list] + [int(half_move), int(full_move)]
+        tensor_out = torch.tensor([out_list], dtype = torch.float32)
+        return tensor_out
+
     @staticmethod
     def castlingTensorFromFEN(castling_fen : str) -> torch.Tensor:
-        bool_list = []
-        bool_list.append("K" in castling_fen)
-        bool_list.append("Q" in castling_fen)
-        bool_list.append("k" in castling_fen)
-        bool_list.append("q" in castling_fen)
+        bool_list = TensorBoardUtilV4._castlingFENtoBoolList(castling_fen)
         return torch.tensor([[1 if b else 0 for b in bool_list]])
     
     @staticmethod
@@ -232,6 +285,9 @@ class TensorBoardUtilV4():
         out_board.fullmove_number = int(tensor[TensorBoardUtilV4.CLOCK_OFFSET + 1].item())
         return out_board
 
+
+
+
 class BoardGenerator():
     
 
@@ -258,6 +314,15 @@ class BoardGenerator():
                 
 
 class TestTensorBoard(unittest.TestCase):
+
+    def test_from_fen(self):
+        for board in BoardGenerator(1000):
+            tensor1 = TensorBoardUtilV4.fromBoard(board)
+            fen = board.fen(en_passant = "fen")
+            tensor2 = TensorBoardUtilV4.fromFEN(fen)
+            with self.subTest(fen):
+                self.assertEqual(tensor1.shape, tensor2.shape)
+                self.assertEqual(tensor1.tolist(), tensor2.tolist())
 
     def test_symmetry_from_games(self):
             for board in BoardGenerator(1000):
@@ -331,6 +396,8 @@ class TestTensorBoard(unittest.TestCase):
                 with self.subTest(fen):
                     self.assertEqual(tensor2.shape[0], tensor1.shape[0])
                     self.assertEqual(tensor1.tolist(), tensor3.tolist())
+
+
 
  
     def test_discretize_castling(self):

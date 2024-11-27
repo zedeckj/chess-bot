@@ -1,7 +1,7 @@
 import dis
 import random
 from board_final import TensorBoardUtilV4
-from autoencoder import BoardAutoencoderV2, SMALL_TENSORS
+from autoencoder import BoardAutoencoder, SMALL_TENSORS
 import unittest
 import chess
 import torch
@@ -9,7 +9,7 @@ from dataloader import TENSORS3, load_train_test
 
 
 
-def run_and_show(model : BoardAutoencoderV2, tensor: torch.Tensor):
+def run_and_show(model : BoardAutoencoder, tensor: torch.Tensor):
     board = TensorBoardUtilV4.toBoard(tensor)
     if board.ep_square == None:
         return
@@ -25,7 +25,7 @@ def run_and_show(model : BoardAutoencoderV2, tensor: torch.Tensor):
 
 
 def main():
-    model = BoardAutoencoderV2()
+    model = BoardAutoencoder()
     model.load_state_dict(torch.load("models/128-autoencoder.pth", weights_only=True))
     _, test_dataset = load_train_test(TENSORS3, 1, 0.1)
     for t in test_dataset:

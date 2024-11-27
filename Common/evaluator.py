@@ -35,7 +35,6 @@ class EvaluatorLoss(nn.Module):
         else:
             evaluations = self.softmin(evaluations)
         return self.ce_loss(evaluations, best_move)
-
     
 
 
