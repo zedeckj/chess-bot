@@ -3,14 +3,15 @@ from chess import Board
 import torch
 from torch import Tensor, nn
 import os
-
+import sys
+sys.path.append("./")
 import tqdm
-from chess_models import BoardAutoencoder
-from board_final import TensorBoardUtilV4
-from dataloader import DATASET_2016_03, DIR_2016_03, LARGER_TENSORS, LARGER_TENSORS2, SMALL_TENSORS, TENSORS3, DIR_2013_12
-from dataloader import load_tensor as dataloader_load_tensor
-from eval_tools import display_precision_recall
-from torch_utils import unbatch
+from src.chess_models import BoardAutoencoder
+from src.board_final import TensorBoardUtilV4
+from src.dataloader import DATASET_2016_03, DIR_2016_03, LARGER_TENSORS, LARGER_TENSORS2, SMALL_TENSORS, TENSORS3, DIR_2013_12
+from src.dataloader import load_tensor as dataloader_load_tensor
+from src.eval_tools import display_precision_recall
+from src.torch_utils import unbatch
 import random
 import chess
 
@@ -72,15 +73,18 @@ class BoardLoss(nn.Module):
         self.clock_loss = clock_loss
 
 
-    def _piece_count_loss(self, piece_probabilities : torch.Tensor) :
+    def _piece_count_loss(self, output : torch.Tensor) :
         """
         Since there is never more than 16 pawns, and never more than 1 king for each color,
         we can add a loss term for predicting there are more than this number. We use the sum of probabilties
         to calculate the projected count.
 
-        We also include bishops, rooks, and knights as having no more than 2.  
+        We also include bishops, rooks, and knights as having no more than 2. 
+        Altough, this is innacuarate due to the existence of underpromotion. An increase in 
+
         """
-        ...
+        pieces_output = TensorBoardUtilV4.tensorToPieceTensors(output)
+        piece_probabilities = torch.zeros([13])
 
 
 

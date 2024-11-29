@@ -9,8 +9,10 @@ from torch.nn import functional
 import unittest
 import itertools
 import torch.share
+import sys
+sys.path.append("./")
 
-from test_torch import TorchUtils
+from src.test_torch import TorchUtils
 
 class TensorBoardUtilV4():
     """

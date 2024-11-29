@@ -1,6 +1,6 @@
 import torch
 import random
-from board_final import TensorBoardUtilV4
+from src.board_final import TensorBoardUtilV4
 
 """
 def precision_recall(binary_output : torch.Tensor, binary_target : torch.Tensor):

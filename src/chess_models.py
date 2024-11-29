@@ -1,6 +1,8 @@
 import torch
 from torch import nn
-from board_final import TensorBoardUtilV4
+import sys
+sys.path.append("../")
+from src.board_final import TensorBoardUtilV4
 import chess
 import os
 
@@ -69,3 +71,36 @@ class ProductionAutoencoder(BoardAutoencoder):
         assert(ProductionAutoencoder.MODEL_DIR in os.listdir("models"))
         self.load_state_dict(torch.load(f"models/{ProductionAutoencoder.MODEL_DIR}", weights_only=True))
 
+
+
+class Evaluator(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(ProductionAutoencoder.TARGET_SIZE, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 1),
+        )
+
+
+    def forward(self, boards_tensor: torch.Tensor):
+        return self.model(boards_tensor)
+    
+
+class ProductionEvaluator(Evaluator):
+
+    MODEL_DIR = "deep-evaluator-mrl"
+
+    def __init__(self):
+        super().__init__()
+        assert(ProductionEvaluator.MODEL_DIR in os.listdir("models"))
+        self.load_state_dict(torch.load(f"models/{ProductionEvaluator.MODEL_DIR}", weights_only=True))
+
+
+    def forward(self, boards_tensor: torch.Tensor):
+        return self.model(boards_tensor)

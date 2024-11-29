@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+import sys
+sys.path.append("../")
 from dataclasses import dataclass
 import multiprocessing
 from tkinter.filedialog import Open
@@ -237,11 +239,12 @@ class MoveSelectionReader(AbstractReader):
                             """
                             tensor0 = self.autoencoder.encodeFromBoard(board_list[0])
                             tensor1 = self.autoencoder.encodeFromBoard(board_list[1])
-                            tensors_list.append(torch.stack([tensor0, tensor1]))
+                            tensors_list.append(torch.cat([tensor0, tensor1]))
                             # The better board for white is always first
                 if len(tensors_list) > 50000 or not last:
-                    pickle.dump(torch.cat(tensors_list), open(f"{AbstractReader.TENSORS_MOVES_DIR}/{self.out_dir}/{this_proc}_{saved}.tnsrs", "wb"))
-                    print(f"saved! {this_proc}_{saved}.tnsrs")
+                    out_tenor = torch.stack(tensors_list)
+                    pickle.dump(out_tenor, open(f"{AbstractReader.TENSORS_MOVES_DIR}/{self.out_dir}/{this_proc}_{saved}.tnsrs", "wb"))
+                    print(f"saved! {this_proc}_{saved}.tnsrs with shape {out_tenor.shape}")
                     saved += 1
                     tensors_list = []
                     if not last:

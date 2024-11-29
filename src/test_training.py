@@ -1,5 +1,5 @@
 import unittest
-from autoencoder import BoardAutoencoder
+from src.autoencoder import BoardAutoencoder
 
 class TestAutoencoder(unittest.TestCase):
 

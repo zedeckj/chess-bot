@@ -1,6 +1,8 @@
 import unittest
 import torch
 from torch.nn import functional
+import sys
+sys.path.append("../")
 
 class TorchUtils:
 
