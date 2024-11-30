@@ -1,5 +1,8 @@
+import chess
 import torch
 import random
+import sys
+sys.path.append("./")
 from src.board_final import TensorBoardUtilV4
 
 """
@@ -25,8 +28,44 @@ def precision_recall(binary_output : torch.Tensor, binary_target : torch.Tensor)
     return precision, recall
 """
 
+def en_passant_accuarcy(discrete_output: torch.Tensor, discrete_target: torch.Tensor) -> tuple[float,float]:
+    """
+    Returns a tuple of the accuarcy of accuarcy of non en-passants, and true en-passants
+    % of None Correct, % of non-None correct
+    """
+    en_passant_output = TensorBoardUtilV4.tensorToEnPassant(discrete_output)
+    en_passant_target = TensorBoardUtilV4.tensorToEnPassant(discrete_output)
+    print(en_passant_target.shape)
+    # Shape is [N, 65]
+    en_passant_output = torch.argmax(en_passant_output, dim = 1)
+    en_passant_target = torch.argmax(en_passant_target, dim = 1)
 
-def precision_recall(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
+
+
+    none_count = en_passant_output.shape[0]
+    ep_count = 0
+
+    none_correct = 0
+    ep_correct = 0
+    if en_passant_target == 0:
+        none_count += 1
+        if en_passant_output == 0:
+            none_correct += 1
+
+    else: 
+        ep_count += 1
+        if en_passant_target == en_passant_output:
+            ep_correct += 1
+    
+    return none_correct/none_count, ep_correct/ep_count
+
+def turn_accuracy(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
+    output_turns = TensorBoardUtilV4.tensorToTurn(discrete_output)
+    target_turns = TensorBoardUtilV4.tensorToTurn(discrete_target)
+
+
+
+def metrics_tensor(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
 
     """
         [isWhitePawn, isWhiteKnight, isWhiteBishop, isWhiteRook, isWhiteQueen, isWhiteKing, 
@@ -47,35 +86,45 @@ def precision_recall(discrete_output : torch.Tensor, discrete_target : torch.Ten
     
     # recall = true positives / true positives + false negatives
     # pre = true positives / true positives + false positives
+    """
     true_positives = torch.zeros(13, device=device)
     false_positives = torch.zeros(13, device=device)
     false_negatives = torch.zeros(13, device=device)
+    """
 
+    true_positives = torch.logical_and(piece_output, piece_target).float().sum(dim = 1)
+    false_positives = torch.logical_and(piece_output, torch.logical_not(piece_target)).float().sum(dim = 1)
+    false_negatives = torch.logical_and(torch.logical_not(piece_output), piece_target).float().sum(dim = 1)
+    
+    """
     for i in range(64):
         square_output = piece_output[...,i, :]
         square_target = piece_target[...,i, :]
-
-        true_positives += torch.logical_and(square_output, square_target).float().sum(dim = 0)
+        print(square_output.shape)
+        log_and = torch.logical_and(square_output, square_target)
+        true_positives += torch.logical_and(square_output, square_target,).float().sum(dim = 0)
         false_positives += torch.logical_and(square_output, torch.logical_not(square_target)).float().sum(dim = 0)
-        false_negatives += torch.logical_and(torch.logical_not(square_output), square_target).float().sum(dim = 0)
+        false_negatives += torch.logical_and(torch.logical_not(square_output), square_target).float().sum(dim = 0)"""
 
-    castling_output = TensorBoardUtilV4.tensorToCastlingRights(discrete_output)
-    castling_target = TensorBoardUtilV4.tensorToCastlingRights(discrete_target)
+    castling_output = TensorBoardUtilV4.tensorToCastlingRights(discrete_output).unsqueeze(dim = 0)
+    castling_target = TensorBoardUtilV4.tensorToCastlingRights(discrete_target).unsqueeze(dim = 0)
 
 
 
-    true_positives_castling = torch.logical_and(castling_output, castling_target).float().sum(dim = 0)
-    false_positives_castling = torch.logical_and(castling_output, torch.logical_not(castling_target)).float().sum(dim = 0)
-    false_negatives_castling = torch.logical_and(torch.logical_not(castling_output), castling_target).float().sum(dim = 0)
 
-    true_positives = torch.cat([true_positives, true_positives_castling])
-    false_positives = torch.cat([false_positives, false_positives_castling])
-    false_negatives = torch.cat([false_negatives, false_negatives_castling])
+    
+    true_positives_castling = torch.logical_and(castling_output, castling_target).float().sum(dim = 1)
+    false_positives_castling = torch.logical_and(castling_output, torch.logical_not(castling_target)).float().sum(dim = 1)
+    false_negatives_castling = torch.logical_and(torch.logical_not(castling_output), castling_target).float().sum(dim = 1)
+    true_positives = torch.cat([true_positives, true_positives_castling], dim = 1)
+    false_positives = torch.cat([false_positives, false_positives_castling], dim = 1)
+    false_negatives = torch.cat([false_negatives, false_negatives_castling], dim = 1)
 
     recall_tensor = true_positives / (true_positives + false_negatives)
     precision_tensor = true_positives / (true_positives + false_positives)
     return recall_tensor, precision_tensor
 
+"""
 def display_precision_recall(real_output : torch.Tensor, discrete_target : torch.Tensor):
     print(real_output.shape)
     discrete_output = TensorBoardUtilV4.discretizeTensor(real_output)
@@ -83,28 +132,23 @@ def display_precision_recall(real_output : torch.Tensor, discrete_target : torch
     index_to_name = ["White Pawn", "White Knight", "White Bishop", "White Rook", "White Queen", "White King", 
                      "Black Pawn", "Black Knight", "Black Bishop", "Black Rook", "Black Queen", "Black King",
                      "Black Space", "White Kingside Castling", "White Queenside Castling", "Black Kingside Castling",
-                     "Black Queenside Castling"]
+                     "Black Queenside Castling",]
     for i in range(17):
         print(f"{index_to_name[i]} Precision: {precision_tensor[0].item()*100:2f}%")
         print(f"{index_to_name[i]} Recall: {recall_tensor[0].item() * 100:2f}%")
     
+    print(f"No EP Accuarcy: {no_ep_acc*100:2f}%")
+    print(f"En-Passant Accuarcy: {ep_acc*100:2f}%")
+    """
 
 import unittest
 
 class TestTensorBoard(unittest.TestCase):
 
-    def test_accuracy_recall_basic(self):
-        ones = torch.ones(100, device= "mps")
-        zeros = torch.zeros(100, device= "mps")
-        half200 = torch.cat([ones, zeros])
-        ones200 = torch.ones(200, device= "mps")
-        zero200 = torch.zeros(200, device= "mps")
-        pre1, rec1 = precision_recall(ones200, half200)
-        pre2, rec2 = precision_recall(zero200, half200)
-        self.assertEqual(pre1, 0.5)
-        self.assertEqual(rec1, 1)
-        self.assertEqual(pre2, 1)
-        self.assertEqual(rec2, 0)
 
+    def test_prec_recall_basic(self):
+        board = chess.Board()
+        tensor1 = TensorBoardUtilV4.fromBoard(chess.Board()).to("mps")
+        
 if __name__ == "__main__":
     unittest.main()

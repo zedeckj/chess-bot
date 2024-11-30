@@ -28,6 +28,26 @@ class TensorBoardUtilV4():
     EN_PASSANT_OFFSET = CASTLING_OFFSET + 4
     CLOCK_OFFSET = EN_PASSANT_OFFSET + 65
 
+    
+
+    @staticmethod
+    def indexOfPiece(piece : Optional[chess.Piece]):
+        """
+        Gets the index of a type of piece inside a piece tensor, which uses the following representation.
+        [isWhitePawn, isWhiteKnight, isWhiteBishop, isWhiteRook, isWhiteQueen, isWhiteKing, 
+        isBlackPawn, isBlackKnight, isBlackBishop, isBlackRook, isBlackQueen, isBlackKing, 
+        isBlankSpace]
+        """
+        TYPES = len(TensorBoardUtilV4.PIECES)
+        if piece == None:
+            return TYPES * 2
+        offset = 0 if piece.color == chess.WHITE else TYPES
+        i = 0
+        for compare_type in TensorBoardUtilV4.PIECES:
+            if compare_type == piece.piece_type:
+                return offset + i
+            i += 1
+        raise Exception("Invalid Piece Given")
 
     @staticmethod
     def _pieceToBoolList(piece : Optional[chess.Piece]) -> list[bool]:
@@ -72,14 +92,15 @@ class TensorBoardUtilV4():
 
     @staticmethod
     def tensorToPieceTensors(tensor : torch.Tensor) -> torch.Tensor:
-        #assert(len(tensor.shape) == 2 and tensor.shape[1] == TensorBoardUtilV4.SIZE)
+        """
+        Based on the given board tensor(s) of shape [N, TensorBoardUtilV4.SIZE], returns a tensor of shape [N, 64, 13], which represents 
+        the type of piece at each square. Each piece tensor represents the following
+
+        [isWhitePawn, isWhiteKnight, isWhiteBishop, isWhiteRook, isWhiteQueen, isWhiteKing, 
+        isBlackPawn, isBlackKnight, isBlackBishop, isBlackRook, isBlackQueen, isBlackKing, 
+        isBlankSpace]
+        """
         out_tensor = tensor[..., 0 : TensorBoardUtilV4.TURN_OFFSET].reshape((tensor.shape[0], 64, TensorBoardUtilV4.PIECE_COMPONENT_SIZE))
-        """
-        assert(len(out_tensor.shape) == 3
-               and out_tensor.shape[0] == tensor.shape[0]
-               and out_tensor.shape[1] == 64 # one tensor for each piece on the board
-               and out_tensor.shape[2] == TensorBoardUtilV4.PIECE_COMPONENT_SIZE)
-        """
         return out_tensor
     
     @staticmethod
@@ -316,6 +337,30 @@ class BoardGenerator():
                 
 
 class TestTensorBoard(unittest.TestCase):
+
+    
+    def test_indexFromPiece(self):
+        """
+        Should follow the given:
+        [isWhitePawn, isWhiteKnight, isWhiteBishop, isWhiteRook, isWhiteQueen, isWhiteKing, 
+        isBlackPawn, isBlackKnight, isBlackBishop, isBlackRook, isBlackQueen, isBlackKing, 
+        isBlankSpace]
+        """
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.WHITE)), 0)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.WHITE)), 1)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.WHITE)), 2)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.WHITE)), 3)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.WHITE)), 4)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KING, chess.WHITE)), 5)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.BLACK)), 6)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.BLACK)), 7)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.BLACK)), 8)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.BLACK)), 9)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.BLACK)), 10)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.BLACK)), 11)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(None), 12)
+        
+
 
     def test_from_fen(self):
         for board in BoardGenerator(1000):

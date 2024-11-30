@@ -4,6 +4,8 @@ import torch
 from torch import Tensor, nn
 import os
 import sys
+
+from src.trainer import Trainer
 sys.path.append("./")
 import tqdm
 from src.chess_models import BoardAutoencoder
@@ -73,22 +75,125 @@ class BoardLoss(nn.Module):
         self.clock_loss = clock_loss
 
 
-    def _piece_count_loss(self, output : torch.Tensor) :
+
+        self.pieces_count_targets = self._create_piece_loss_targets()
+
+
+
+    def _create_piece_loss_targets(self):
+        targets = torch.zeros(13)
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.WHITE))] = 16
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.BLACK))] = 16
+
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.WHITE))] = 2
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.BLACK))] = 2
+
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.WHITE))] = 2
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.BLACK))] = 2
+
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KING, chess.WHITE))] = 1
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KING, chess.BLACK))] = 1
+
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.WHITE))] = 2
+        targets[TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.BLACK))] = 2
+
+        targets[TensorBoardUtilV4.indexOfPiece(None)] = 32
+        targets[TensorBoardUtilV4.indexOfPiece(None)] = 32
+
+        # Queens remain at zero, as they will be excluded from the loss utilizing this tensor
+
+        return targets
+
+        
+
+
+
+
+
+    def piece_count_loss_fn(self, output : torch.Tensor) -> torch.Tensor:
         """
         Since there is never more than 16 pawns, and never more than 1 king for each color,
         we can add a loss term for predicting there are more than this number. We use the sum of probabilties
-        to calculate the projected count.
+        to calculate the projected count. 
 
         We also include bishops, rooks, and knights as having no more than 2. 
-        Altough, this is innacuarate due to the existence of underpromotion. An increase in 
+        Altough, this is innacuarate in edge cases due to the existence of underpromotion. However,
+        the usage of under promotion while also having two other instances of the target piece is 
+        too rare of an occurance to bother with, and likely never appears in the training set.
 
         """
         pieces_output = TensorBoardUtilV4.tensorToPieceTensors(output)
-        piece_probabilities = torch.zeros([13])
+        # unsure about these dimensions
+        pieces_softmax = torch.softmax(pieces_output, dim = 1) 
+        pieces_summed = torch.sum(pieces_softmax, dim = 1)
+        # we expect a shape of [N, 13] at this point
+        pieces_summed[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.WHITE))] = 0
+        pieces_summed[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.BLACK))] = 0
 
+        differences = (pieces_summed - self.pieces_count_targets) ** 3
+        zeroes = torch.zeros(differences.shape)
+        return torch.maximum(differences, zeroes)
+
+        """
+        # THIS CAN BE PARALLIZED MUCH BETTER
+        pieces_output = TensorBoardUtilV4.tensorToPieceTensors(output)
+        # unsure about these dimensions
+        pieces_softmax = torch.softmax(pieces_output, dim = 1) 
+        pieces_summed = torch.sum(pieces_softmax, dim = 1)
+        # we expect a shape of [N, 13] at this point
+
+        # drop queens from our calculation
+        pieces_summed[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.WHITE))] = 0
+        pieces_summed[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.BLACK))] = 0
+
+        white_king_count_loss = 0
+        black_king_count_loss = 0
+        king_count_loss = white_king_count_loss + black_king_count_loss
+
+        white_pawn_count_loss = 0
+        black_pawn_count_loss = 0
+        pawn_count_loss = white_pawn_count_loss + black_pawn_count_loss
+
+        white_knight_count_loss = 0
+        black_knight_count_loss = 0
+        knight_count_loss = white_knight_count_loss + black_knight_count_loss
+
+        white_bishop_count_loss = 0
+        black_bishop_count_loss = 0
+        bishop_count_loss = white_bishop_count_loss + black_bishop_count_loss
+
+        white_rook_count_loss = 0
+        black_rook_count_loss = 0
+        rook_count_loss = white_bishop_count_loss + black_bishop_count_loss
+        
+        # Queens are noticeable excluded, as pawn promotion to a queen is not an edge case at all
+
+        return (
+            king_count_loss +
+            pawn_count_loss +
+            knight_count_loss +
+            bishop_count_loss 
+        )
+        """
+
+
+            
 
 
     def pices_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the loss value for piece placement conditions, using 64 distinct CE losses. Revised slightly to parallize generating class labels. 
+        Since there exists a unique loss function for each piece-square, this part cannot be parallelized. 
+        """
+        pieces_output = TensorBoardUtilV4.tensorToPieceTensors(output)
+        pieces_target = TensorBoardUtilV4.tensorToPieceTensors(target)
+        class_labels = torch.argmax(pieces_target, dim = 1)
+        piece_loss_list = []
+        for i in range(64):
+            piece_loss_list.append(self.pieces_loss[i](pieces_output[...,i, :], class_labels[i]))
+        return torch.stack(piece_loss_list).sum()
+
+    def pices_loss_fn_old(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
         pieces_output = TensorBoardUtilV4.tensorToPieceTensors(output)
         pieces_target = TensorBoardUtilV4.tensorToPieceTensors(target)
         piece_loss_list = []
@@ -98,39 +203,53 @@ class BoardLoss(nn.Module):
         return torch.stack(piece_loss_list).sum()
     
     def turn_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the loss value for whose turn it is, which is encoded as a single logit, using Binary Cross Entroy.
+        """
         turn_output = TensorBoardUtilV4.tensorToTurn(output)
         turn_target = TensorBoardUtilV4.tensorToTurn(target)
         loss = self.turn_loss(turn_output, turn_target)
         return loss
 
     def castling_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the loss value for castling rights, using Binary Cross Entropy for the 4 castling bits.
+        """
         castling_output = TensorBoardUtilV4.tensorToCastlingRights(output)
         castling_target = TensorBoardUtilV4.tensorToCastlingRights(target)
         loss = self.castling_loss(castling_output, castling_target)
         return loss
         
     def en_passant_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the loss for the en passant square, using Cross Entropy Loss over the 65 logits.
+        """
         en_passant_output = TensorBoardUtilV4.tensorToEnPassant(output)
         en_passant_target = torch.argmax(TensorBoardUtilV4.tensorToEnPassant(target), dim = 1)
         return self.en_passant_loss(en_passant_output, en_passant_target)
                                     
     def clock_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the loss for the half-move and full-move clocks using L1 loss, or MAE.
+        """
         clock_output = TensorBoardUtilV4.tensorToTimers(output)
         clock_target = TensorBoardUtilV4.tensorToTimers(target)
         return self.clock_loss(clock_output, clock_target)
 
 
-    def forward(self, output : torch.Tensor, target : torch.Tensor):
-        #turn_loss = self.turn_loss_fn(output, target)
-        #castling_loss = self.castling_loss_fn(output, target)
+    def forward(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
+        """
+        Calculates loss using the sum of loss values for specific elements of the baord 
+        """
         out = (
             self.pices_loss_fn(output, target) 
+            + self.piece_count_loss_fn(output)
             + self.turn_loss_fn(output, target)
             + self.castling_loss_fn(output, target)
             + self.en_passant_loss_fn(output, target)
             + self.clock_loss_fn(output, target)
+
         )
-        #print(f"TOTAL LOSS {out} CASTLING {castling_loss} TURN {turn_loss}")
         return out
 
 
@@ -150,123 +269,17 @@ def load_train_test() -> tuple[list[str], str]:
 
 
 
-class AutoencoderTrainer:
-
-    BATCH_SCALE_TESTING = 64
-    DEVICE = "mps"
-    BASE_LEARNING_RATE = 1e-4
-
-    def __init__(self, 
-                 training_files : list[str], testing_file : str, 
-                 model : nn.Module, model_name : str,
-                 loss_fn_constructor : Callable[[torch.Tensor], nn.Module], in_datashape : list[int], 
-                 batch_size : int = 64,
-                 model_save_name : Optional[str] = None,
-                 device : str = "mps"):
-       
-        self.training_batch_size = batch_size
-        self.testing_batch_size = batch_size * AutoencoderTrainer.BATCH_SCALE_TESTING
-        self.datashape = in_datashape
-        self.training_files = training_files
-        self.test_tensor = self.load_tensor(testing_file, self.testing_batch_size)
-        self.test_loss = loss_fn_constructor(self.test_tensor)
-        self.model = model.to(AutoencoderTrainer.DEVICE)
-        if model_name in os.listdir("models"):
-            self.model.load_state_dict(torch.load(f"models/{model_name}", weights_only=True))
-        self.model_save_name = model_name if model_save_name == None else model_save_name
-        self.device = device
-
-        
-        self.loss_fn_constructor = loss_fn_constructor
-        self.optimizer = torch.optim.SGD(self.model.parameters())
-
-        self.learning_rate = AutoencoderTrainer.BASE_LEARNING_RATE * (self.training_batch_size/8)
-
-
-    def load_tensor(self, filename : str, batch_size : int) -> torch.Tensor:
-        tensor = dataloader_load_tensor(filename).to(AutoencoderTrainer.DEVICE)
-        found_datashape = list(tensor.shape[-len(self.datashape):])
-        print(f"Loaded {filename} board tensor file of shape {tensor.shape}")
-        assert(found_datashape == self.datashape)
-
-        batch_count = tensor.shape[0] // batch_size
-        new_length = batch_count * batch_size
-        tensor = tensor[:new_length]
-        out = torch.reshape(tensor, [batch_count, batch_size] + self.datashape)
-        print(f"Transformed into {out.shape}")
-        return out
-
-
-    def load_training(self, i : int) -> torch.Tensor:
-        return self.load_tensor(self.training_files[i], self.training_batch_size)
-
-    def shuffle(self, tensor : torch.Tensor):
-        indices = torch.randperm(tensor.size(0))
-        tensor = tensor[indices]
-        return tensor
-
-    def train(self, dataset : torch.Tensor):
-        self.model.train()
-
-        iterator = tqdm.tqdm(range(len(dataset)))
-        dataset = self.shuffle(dataset)
-        iters = 0
-        average_loss = 0
-        loss_fn = self.loss_fn_constructor(dataset)
-        total_loss = 0
-        pred_list = []
-        for batch in iterator:
-            real = dataset[batch].to(AutoencoderTrainer.DEVICE)
-            pred = self.model(real)
-            loss : torch.Tensor = loss_fn(pred, real)
-            total_loss += loss.item()
-            pred_list.append(pred)
-            loss.backward()
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-
-            if batch % 100 == 0:
-                loss_item = loss.item()
-                iterator.set_description(f"Training loss: {loss_item}, Avg: {total_loss / (batch + 1)} ")
-                iters += 1
-        display_precision_recall(torch.cat(pred_list), unbatch(dataset))
-
-
-    def test(self):
-        self.model.eval()
-        total_loss = 0
-        pred_list = []
-        with torch.no_grad():
-            for i in tqdm.tqdm(range(len(self.test_tensor)), desc = "Testing"):
-                real = self.test_tensor[i].to(AutoencoderTrainer.DEVICE)
-                pred = self.model(real)
-                pred_list.append(pred)
-                total_loss += self.test_loss(pred, real).item()
-            print(f"Average Testing Loss {total_loss/len(self.test_tensor)}")
-            display_precision_recall(torch.cat(pred_list), unbatch(self.test_tensor))
-
-    def save(self):
-        torch.save(self.model.state_dict(),f"models/{self.model_save_name}")
-
-    def run(self):
-        for i in range(len(self.training_files)):
-            self.test()
-            training_tensor = self.load_training(i)
-            self.train(training_tensor)
-            self.save()
-            print("saved!")
-            print(f"Finished Epoch {i}\n")
-
 
 
 if __name__ == "__main__":
-    training_files, testing_file = load_train_test()
-    trainer = AutoencoderTrainer(
+    training_files = []
+    testing_files = []
+    trainer = Trainer(
         training_files,
-        testing_file,
+        testing_files,
         BoardAutoencoder(),
-        "128-autoencoder.pth",
-        BoardLoss,
-        [TensorBoardUtilV4.SIZE]
+        "autoencoder",
+        [TensorBoardUtilV4.SIZE],
+        loss_fn_constructor = BoardLoss,
     )
     trainer.run()

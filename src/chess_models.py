@@ -44,14 +44,13 @@ class BoardAutoencoder(nn.Module):
         encoded = self.encoder(x)
         y = self.decoder(encoded)
         return y
-    
-    def full_output(self, x):
-        encoded = self.encoder(x)
-        return self.full_decode(encoded)
 
-    def encodeFromTensor(self, tensor : torch.Tensor) -> torch.Tensor:
+    def encode(self, tensor : torch.Tensor) -> torch.Tensor:
         return self.encoder(tensor)
     
+    def decode(self, tensor : torch.Tensor) -> torch.Tensor:
+        return self.decoder(tensor)
+
     def encodeFromBoard(self, board : chess.Board) -> torch.Tensor:
         return self.encoder(TensorBoardUtilV4.fromBoard(board))
 
@@ -60,6 +59,34 @@ class BoardAutoencoder(nn.Module):
 
     def decodeToBoard(self, tensor: torch.Tensor) -> chess.Board:
         return TensorBoardUtilV4.toBoard(self.full_decode(tensor))
+    
+
+class SmallerAutoencoder(BoardAutoencoder):
+    LAYER_A = 2048
+    LAYER_B = 1024
+    LAYER_C = 512
+    TARGET_SIZE = 256
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(TensorBoardUtilV4.SIZE, BoardAutoencoder.LAYER_A),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_A, BoardAutoencoder.LAYER_B),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_B, BoardAutoencoder.LAYER_C),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_C, BoardAutoencoder.TARGET_SIZE),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(BoardAutoencoder.TARGET_SIZE, BoardAutoencoder.LAYER_C),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_C, BoardAutoencoder.LAYER_B),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_B, BoardAutoencoder.LAYER_A),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_A, TensorBoardUtilV4.SIZE),
+        )
     
 
 class ProductionAutoencoder(BoardAutoencoder):
