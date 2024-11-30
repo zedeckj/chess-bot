@@ -268,9 +268,6 @@ def load_train_test() -> tuple[list[str], str]:
     return training_files, test_file
 
 
-
-
-
 if __name__ == "__main__":
     training_files = []
     testing_files = []

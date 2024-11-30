@@ -275,11 +275,10 @@ class MoveSelectionReader(AbstractReader):
 
 
 
-
 def pipeline():
     t = time.time()
-    reader = MoveSelectionReader(MASTERS_DATASET, MASTERS1)
-    reader.run_uncompressed()
+    reader = BoardReader(DATASET_2016_03, DIR_2016_03)
+    reader.run()
     print(f"Full pipeline took {time.time() - t}")
 
 
