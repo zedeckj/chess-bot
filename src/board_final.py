@@ -91,6 +91,7 @@ class TensorBoardUtilV4():
     
 
     @staticmethod
+    
     def tensorToPieceTensors(tensor : torch.Tensor) -> torch.Tensor:
         """
         Based on the given board tensor(s) of shape [N, TensorBoardUtilV4.SIZE], returns a tensor of shape [N, 64, 13], which represents 
@@ -102,6 +103,7 @@ class TensorBoardUtilV4():
         """
         out_tensor = tensor[..., 0 : TensorBoardUtilV4.TURN_OFFSET].reshape((tensor.shape[0], 64, TensorBoardUtilV4.PIECE_COMPONENT_SIZE))
         return out_tensor
+    
     
     @staticmethod
     def tensorToCastlingRights(tensor : torch.Tensor) -> torch.Tensor:
@@ -355,9 +357,9 @@ class TestTensorBoard(unittest.TestCase):
         self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.BLACK)), 6)
         self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.BLACK)), 7)
         self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.BLACK)), 8)
-        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.BLACK)), 9)
-        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.BLACK)), 10)
-        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.BLACK)), 11)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.BLACK)), 9)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.QUEEN, chess.BLACK)), 10)
+        self.assertEqual(TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KING, chess.BLACK)), 11)
         self.assertEqual(TensorBoardUtilV4.indexOfPiece(None), 12)
         
 

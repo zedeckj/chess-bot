@@ -207,7 +207,8 @@ class AbstractChessAgent(ABC):
 class NaiveChessAgent(AbstractChessAgent):
 
 
-    def _calculate_material(self, board : chess.Board) -> float: 
+    def _material(self, board : chess.Board) -> float: 
+        MATERIAL_SCALE = 100
         material = 0
         for square in range(64):
             piece = board.piece_at(square)
@@ -228,7 +229,21 @@ class NaiveChessAgent(AbstractChessAgent):
                     material += value
                 else:
                     material -= value
-        return material
+        return MATERIAL_SCALE * material
+    
+    def _mobility(self, board : chess.Board) -> float:
+        MOBILITY_SCALE = 10
+        original_turn = board.turn
+        board.turn = chess.WHITE
+        white_mobility = len(list(board.legal_moves))
+        board.turn = chess.BLACK
+        black_mobility = len(list(board.legal_moves))
+        board.turn = original_turn
+        return MOBILITY_SCALE * (white_mobility - black_mobility)
+
+
+    def _double_pawns(self, board : chess.Board) -> float:
+        board.
 
 
     def evaluate(self, board: chess.Board) -> float:
@@ -264,3 +279,4 @@ class NeuralAgent(AbstractChessAgent):
         
     def get_name(self) -> str:
         return f"Neural Agent"
+

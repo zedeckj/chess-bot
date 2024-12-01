@@ -9,11 +9,13 @@ from math import inf
 from typing import Optional, Callable
 from dataloader import load_tensor as dataloader_load_tensor
 
-class Trainer:
-    BATCH_SIZE = 64
+class SelfSupervisedTrainer:
     DEVICE = "mps"
-    LEARNING_RATE = 1e-4 * (BATCH_SIZE/8)
     MODEL_NAME = "deep-evaluator-mrl2"
+    TRAINING_STR = "training"
+    TESTING_STR = "testing"
+    CURRENT_FILE_STR = "current_file"
+    INITAL_LOSS = "initial_loss"
 
     def __init__(self, 
                  training_files : list[str], 
@@ -21,10 +23,23 @@ class Trainer:
                  model : nn.Module,
                  model_name : str,
                  datashape : list[int],
+                 preprocessor : Optional[nn.Module] = None,
                  loss_fn_constructor : Optional[Callable[[torch.Tensor], nn.Module]] = None,
                  loss_fn : Optional[nn.Module] = None,
+                 base_learning_rate : float = 1e-4,
                  batch_size : int = 64,
                  device : str = "mps"):
+        self.device = device
+        self.preprocessor = preprocessor
+        self.batch_size = batch_size
+        self.learning_rate = base_learning_rate * (self.batch_size/8)
+        self.training_files = training_files
+        self.testing_files = testing_files
+        self.datashape = datashape
+        self.model = model
+        self.model.to(device)
+        self.model_name = model_name
+        print(f"Batch size initialized to {self.batch_size}")
         if loss_fn_constructor != None:
             self.loss_fn = self.create_loss_fn(loss_fn_constructor)
         elif loss_fn != None:
@@ -32,20 +47,12 @@ class Trainer:
         else:
             raise Exception("Either loss_fn or loss_fn_constructor must be specified")
         self._init_directories()
-        self.device = device
-        self.datashape = datashape
-        self.batch_size = batch_size
-        self.learning_rate = 1e-4 * (self.batch_size/8)
-        self.model = model
-        self.model.to(device)
-        self.model_name = model_name
-        if model_name in os.listdir("models"):
-            self.model.load_state_dict(torch.load(f"models/{self.model_name}", weights_only=True))
-        self.epoch_losses = []   
-
+        models = os.listdir("models")
+        if f"{self.model_name}.pth" in models:
+            self.model.load_state_dict(torch.load(f"models/{self.model_name}.pth", weights_only=True))
+            print("Saved model loaded.")
         self.optimizier = SGD(self.model.parameters(), self.learning_rate)
-        self.training_files = training_files
-        self.testing_files = testing_files
+        self.load_epoch_and_loss()
 
     def _init_directories(self):
         if "models" not in os.listdir("."):
@@ -55,21 +62,32 @@ class Trainer:
 
 
     def create_loss_fn(self, constructor : Callable[[torch.Tensor], nn.Module]) -> nn.Module:
+        MAX_FILE_COUNT = 5
         training_datasets = []
-        for i in range(len(self.training_files)):
-            training_datasets.append(self.load_training(i))
+        i = 0
+        while len(training_datasets) < min(MAX_FILE_COUNT, len(self.training_files)):
+            data = self.load_training(i)
+            if data != None:
+                training_datasets.append(data)
+            i += 1
         dataset = torch.cat(training_datasets, dim = 0)
+        print("Constructing loss function...")
         return constructor(dataset)
 
     def train(self, dataset : torch.Tensor, sec : int, epoch: int, last_total : float):
+        if last_total == None:
+            print("Training file was previously corrupted, skipping")
+            return
         self.model.train()
         iterable = tqdm(range(len(dataset)))
         total_loss = 0
         for i in iterable:
             X = dataset[i]
+            if self.preprocessor != None:
+                X = self.preprocessor(X)
             predictions = self.model(X)
             loss = self.loss_fn(predictions, X)
-            total_loss += loss
+            total_loss += loss.item()
             loss.backward() 
             self.optimizier.step()
             self.optimizier.zero_grad()
@@ -85,9 +103,11 @@ class Trainer:
         with torch.no_grad():
             for i in iteratable:
                 X = dataset[i]
+                if self.preprocessor != None:
+                    X = self.preprocessor(X)
                 evaluations = self.model(X)
-                loss = self.loss_fn(evaluations)
-                total_loss += loss
+                loss = self.loss_fn(evaluations, X)
+                total_loss += loss.item()
                 if i % 10 == 0:
                     iteratable.set_description(f"Testing section {section} loss {total_loss:.4f}")
         return total_loss
@@ -102,67 +122,87 @@ class Trainer:
                 continue
             total_loss += self.test_single(dataset, i)
         print(f"Testing total loss is {total_loss}")
-        return total_loss
+        self.losses[SelfSupervisedTrainer.TESTING_STR].append(total_loss)
             
 
 
     def save(self):
-        pickle.dump(self.epoch_losses, open(f"losses/{self.model_name}", "wb"))
-        torch.save(self.model.state_dict(),f"models/{self.model_name}")
+        pickle.dump(self.losses, open(f"losses/{self.model_name}", "wb"))
+        torch.save(self.model.state_dict(),f"models/{self.model_name}.pth")
 
-    def load_epoch(self):
+    def load_epoch_and_loss(self):
         if self.model_name in os.listdir("losses"):
             with open(f"losses/{self.model_name}", "rb") as f:
-                self.epoch_losses = pickle.load(f)
-            return len(self.epoch_losses)
-        return 0
+                self.losses = pickle.load(f)
+            self.starting_epoch = len(self.losses[SelfSupervisedTrainer.TESTING_STR]) - 1
+            return 
+        self.starting_epoch = 0
+        self.losses = {SelfSupervisedTrainer.TESTING_STR : [], SelfSupervisedTrainer.TRAINING_STR: [], SelfSupervisedTrainer.CURRENT_FILE_STR: 0}
+        
+
+            
 
     def run(self):
         MAX_EPOCHS = 1000
-        iterable = range(len(self.training_files))
-        lass_testing_loss = self.run_test()
-        for epoch in range(self.load_epoch(), MAX_EPOCHS):
+        starting_index = self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] 
+        if starting_index == 0:
+            self.run_test()
+            self.losses[SelfSupervisedTrainer.TRAINING_STR].append([])
+        for epoch in range(self.starting_epoch, MAX_EPOCHS):
+            iterable = range(starting_index, len(self.training_files))
             losses = []
             for i in iterable:
                 dataset = self.load_training(i)
                 if dataset == None:
                     print("Invalid dataset, skipping")
+                    losses.append(None)
                     continue
-                loss = self.train(dataset, i, epoch, inf if epoch == 0 else self.epoch_losses[epoch - 1][i])
+                last_loss = inf if epoch == 0 else self.losses[SelfSupervisedTrainer.TRAINING_STR][epoch - 1][i]
+                loss = self.train(dataset, i, epoch, last_loss)
                 losses.append(loss)
-            self.epoch_losses.append(losses)
-            testing_loss = self.run_test()
-            if testing_loss > lass_testing_loss:
-                print(f"Testing loss {testing_loss}, not improved from {lass_testing_loss}. Model no longer improving, finishing training")
+                if i % 10 == 0 and i != 0:
+                    self.losses[SelfSupervisedTrainer.TRAINING_STR][-1] = losses
+                    self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] = i
+                    self.save()
+            self.run_test()
+            testing_loss = self.losses[SelfSupervisedTrainer.TESTING_STR][-1]
+            last_testing_loss = self.losses[SelfSupervisedTrainer.TESTING_STR][-2]
+            self.losses[SelfSupervisedTrainer.TRAINING_STR].append(losses)
+            self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] = 0
+            starting_index = 0
+            if testing_loss > last_testing_loss:
+                print(f"Testing loss {testing_loss}, not improved from {last_testing_loss}. Quiting training.")
                 return
-                
-            print(f"Finished epoch {epoch} with testing loss of {testing_loss}, improved from {lass_testing_loss}, saving!\n\n")
-            lass_testing_loss = testing_loss
-            self.save()
+            else:
+                print(f"Finished epoch {epoch} with testing loss of {testing_loss}, improved from {last_testing_loss}, saving!\n")
+                self.save()
+            
 
 
 
-    def load_tensor(self, filename : str, batch_size : int) -> torch.Tensor:
+    def load_tensor(self, filename : str) -> torch.Tensor:
         tensor = dataloader_load_tensor(filename).to(self.device)
         found_datashape = list(tensor.shape[-len(self.datashape):])
         assert(found_datashape == self.datashape)
 
-        batch_count = tensor.shape[0] // batch_size
-        new_length = batch_count * batch_size
+        batch_count = tensor.shape[0] // self.batch_size
+        new_length = batch_count * self.batch_size
         tensor = tensor[:new_length]
-        out = torch.reshape(tensor, [batch_count, batch_size] + self.datashape)
+        out = torch.reshape(tensor, [batch_count, self.batch_size] + self.datashape)
         return out
 
     def load_testing(self, i : int) -> Optional[torch.Tensor]:
         try:
-            out = self.load_tensor(self.testing_files[i], self.batch_size)
+            out = self.load_tensor(self.testing_files[i])
             return out
         except:
             return None
 
     def load_training(self, i : int) -> Optional[torch.Tensor]:
         try:
-            out = self.load_tensor(self.training_files[i], self.batch_size)
+            out = self.load_tensor(self.training_files[i])
+            print(f"Loaded training file {i}")
             return out
-        except:
+        except Exception as e:
+            print(f"Failed to load training file {i}: {e}")
             return None

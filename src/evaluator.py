@@ -205,7 +205,6 @@ class EvaluatorTrainer:
             if testing_loss > lass_testing_loss:
                 print(f"Testing loss {testing_loss}, not improved from {lass_testing_loss}. Model no longer improving, finishing training")
                 return
-                
             print(f"Finished epoch {epoch} with testing loss of {testing_loss}, improved from {lass_testing_loss}, saving!\n\n")
             lass_testing_loss = testing_loss
             self.save()
