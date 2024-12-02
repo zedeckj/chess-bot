@@ -27,6 +27,7 @@ class TestBoardLoss(unittest.TestCase):
 
 def run_and_show(model : ProductionAutoencoder, board : chess.Board):
     VERBOSE = False
+    model.eval()
     tensor = TensorBoardUtilV4.fromBoard(board)
     if board.ep_square == None:
         return
@@ -36,7 +37,7 @@ def run_and_show(model : ProductionAutoencoder, board : chess.Board):
     castling_tensor2 = torch.sigmoid(TensorBoardUtilV4.tensorToCastlingRights(decoded))
     pieces_decoded = TensorBoardUtilV4.tensorToPieceTensors(decoded)
     pieces_probs = torch.softmax(pieces_decoded, dim = -1)
-    
+    pieces_probs = torch.clamp((pieces_probs - 1/13), min = 0) * 13/(12)  
     discrete = TensorBoardUtilV4.discretizeTensor(decoded)
     true_pieces = TensorBoardUtilV4.tensorToPieceTensors(tensor)
 

@@ -92,7 +92,7 @@ class SelfSupervisedTrainer:
             loss.backward() 
             self.optimizier.step()
             self.optimizier.zero_grad()
-            if i % 10 == 0:
+            if i % 10 == 0 or len(dataset) - 1 == i:
                 iterable.set_description(f"Epoch {epoch} section {sec} loss {total_loss:.4f}, prevous was {last_total:.4f}")
         return total_loss
         
@@ -109,7 +109,7 @@ class SelfSupervisedTrainer:
                 evaluations = self.model(X)
                 loss = self.loss_fn(evaluations, X)
                 total_loss += loss.item()
-                if i % 10 == 0:
+                if i % 10 == 0 or len(dataset) - 1 == i:
                     iteratable.set_description(f"Testing section {section} loss {total_loss:.4f}")
         return total_loss
 
@@ -131,9 +131,10 @@ class SelfSupervisedTrainer:
         with open(f"losses/{self.model_name}.json", "w") as f:
             f.write(json.dumps(self.losses))
         torch.save(self.model.state_dict(),f"models/{self.model_name}.pth")
+        print("Model and losses saved!")
 
     def load_epoch_and_loss(self):
-        if self.model_name in os.listdir("losses"):
+        if f"{self.model_name}.json" in os.listdir("losses"):
             with open(f"losses/{self.model_name}.json", "r") as f:
                 self.losses = json.loads(f.read())
             self.starting_epoch = len(self.losses[SelfSupervisedTrainer.TESTING_STR]) - 1
@@ -152,32 +153,30 @@ class SelfSupervisedTrainer:
             self.losses[SelfSupervisedTrainer.TRAINING_STR].append([])
         for epoch in range(self.starting_epoch, MAX_EPOCHS):
             iterable = range(starting_index, len(self.training_files))
-            losses = []
             for i in iterable:
                 dataset = self.load_training(i)
                 if dataset == None:
                     print("Invalid dataset, skipping")
-                    losses.append(None)
+                    self.losses[SelfSupervisedTrainer.TRAINING_STR][-1].append(None)
                     continue
                 last_loss = inf if epoch == 0 else self.losses[SelfSupervisedTrainer.TRAINING_STR][epoch - 1][i]
                 loss = self.train(dataset, i, epoch, last_loss)
-                losses.append(loss)
+                self.losses[SelfSupervisedTrainer.TRAINING_STR][-1].append(loss)
+                self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] = i + 1
                 if i % 10 == 0 and i != 0:
-                    self.losses[SelfSupervisedTrainer.TRAINING_STR][-1] = losses
-                    self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] = i
                     self.save()
             self.run_test()
             testing_loss = self.losses[SelfSupervisedTrainer.TESTING_STR][-1]
             last_testing_loss = self.losses[SelfSupervisedTrainer.TESTING_STR][-2]
-            self.losses[SelfSupervisedTrainer.TRAINING_STR].append(losses)
             self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] = 0
             starting_index = 0
+            self.save()
             if testing_loss > last_testing_loss:
                 print(f"Testing loss {testing_loss}, not improved from {last_testing_loss}. Quiting training.")
                 return
             else:
-                print(f"Finished epoch {epoch} with testing loss of {testing_loss}, improved from {last_testing_loss}, saving!\n")
-                self.save()
+                print(f"Finished epoch {epoch} with testing loss of {testing_loss}, improved from {last_testing_loss}. Continuing Training\n")
+                
             
 
 

@@ -34,6 +34,7 @@ class BoardAutoencoder(nn.Module):
             nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_A, TensorBoardUtilV4.SIZE),
+            nn.ReLU()
         )
     
 

@@ -43,17 +43,14 @@ class BoardLoss(nn.Module):
                 tensor = mask * tensor
                 positives += torch.sum(tensor, dim = 0) 
             lengths = dataset.shape[0] * dataset.shape[1]
-            
             full_pieces_positives = torch.squeeze(TensorBoardUtilV4.tensorToPieceTensors(positives))
             self.ep_illegal_mask = torch.lt(TensorBoardUtilV4.tensorToEnPassant(positives), 1).float()
             bce_out = (lengths - positives)/(positives + 1e-8)
             ce_out = lengths/(positives + 1e-14)
             #pieces_weight = torch.squeeze(lengths/pieces_positives)
             #pieces_weight = lengths/(full_pieces_positives + 1e-14)
-            #NORMALIZE_EXP = 1/2 # used to reduce extreme variance, which cause unstable loss evaluations
-            pieces_weight = (lengths)/((full_pieces_positives + 1e-14)) 
-            bce_empty = lengths-full_pieces_positives[:,12]/(full_pieces_positives[:,12] + 1e-8)
-
+            NORMALIZE_EXP = 1/2 # used to reduce extreme variance, which cause unstable loss evaluations
+            pieces_weight = (lengths ** NORMALIZE_EXP)/((full_pieces_positives + 1e-14) ** NORMALIZE_EXP) 
             """
             weights_list = torch.flatten(pieces_weight).tolist()
             weights_list.sort()
@@ -77,7 +74,7 @@ class BoardLoss(nn.Module):
             turn_loss = nn.BCEWithLogitsLoss(pos_weight = turn_weight)
             castling_loss = nn.BCEWithLogitsLoss(pos_weight = castling_weight)
             en_passant_loss = nn.CrossEntropyLoss(weight = en_passant_weight)
-            self.piece_limits = self._create_piece_limits(dataset.shape[1])
+
             return bare_pieces_loss, turn_loss, castling_loss, en_passant_loss       
 
 
@@ -90,47 +87,26 @@ class BoardLoss(nn.Module):
         self.castling_loss = castling_loss
         self.en_passant_loss = en_passant_loss
         self.l1_loss = nn.L1Loss()
-        self.margin_ranking_loss = nn.MarginRankingLoss()
-        
 
-    def _create_piece_limits(self, batch_size : int):
+    def piece_count_loss(self, pieces_output: torch.Tensor, pieces_target : torch.Tensor) -> torch.Tensor:
         """
-        Creates the limit values for the piece count component of the loss function. 
+        Generates a loss value for differences between the summed probabilities of pieces_output and the true counts
+        of each piece
         """
-
-        targets = torch.zeros((batch_size,13), device = DEVICE)
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.WHITE))] = 8
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.PAWN, chess.BLACK))] = 8
-
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KING, chess.WHITE))] = 1
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KING, chess.BLACK))] = 1
-
-
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.WHITE))] = 2
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.KNIGHT, chess.BLACK))] = 2
-
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.WHITE))] = 2
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.BISHOP, chess.BLACK))] = 2
+        PIECE_COUNT = 13
+        # excluding empty squares, as with sparse boards they dominate the loss here
+        pieces_output = pieces_output[:,:,0:12]
+        pieces_target = pieces_target[:,:,0:12]
+        softmax_output = torch.softmax(pieces_output, dim = -1)
+        # rescaled to exclude probabilities of pieces that are certainly not the maximum
+        rescaled_ouput = torch.clamp((softmax_output - 1/PIECE_COUNT), min = 0) * PIECE_COUNT/(PIECE_COUNT - 1)  
+        summed_output = torch.sum(rescaled_ouput, dim = 1)
+        summed_target = torch.sum(pieces_target, dim = 1)
+        loss = self.l1_loss(summed_output, summed_target)
+        if BoardLoss.PRINT_LOSSES:
+            print(f"COUNT LOSS {loss}")
+        return loss
     
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.WHITE))] = 2
-        targets[:,TensorBoardUtilV4.indexOfPiece(chess.Piece(chess.ROOK, chess.BLACK))] = 2
-
-        
-        targets[:,TensorBoardUtilV4.indexOfPiece(None)] = 62 # There must always be at least 2 Kings
-
-        return targets
-
-        ...
-
-        
-
-
-    def double_bishop_loss_fn(self, pieces_output: torch.Tensor):
-        """
-        Two of a players bishops can only be on the same square color in the extremely rare case of bishop underpromotion.
-        Each player's summed probability of a bishop for a square color should be 1.
-        """
-        ...
 
     def illegal_pawn_loss_fn(self, pieces_output: torch.Tensor) -> torch.Tensor:
         """
@@ -148,34 +124,6 @@ class BoardLoss(nn.Module):
         return loss
     
 
-    def piece_count_loss_fn(self, pieces_output : torch.Tensor) -> torch.Tensor:
-        """
-        This loss term accounts for predicting impossible or extremely unlikely piece counts, which consist of more than the following for a player.
-        This loss is constant within the threshold values, but we're unsure if it should be linear or quadratic outside.
-
-            > 1 King
-            > 8 Pawns
-            > 2 Rooks
-            > 2 Bishops
-            > 2 Knights
-
-        And Overall:
-            < 32 Empty Squares
-        
-            
-        """
-        pieces_softmax = torch.softmax(pieces_output, dim = -1) 
-        output_summed = torch.sum(pieces_softmax, dim = 1) 
-        # target_count_loss = self.l1_loss(output_summed[:,0:12], target_summed[:,0:12])  old loss term that tried to center counts around target
-        piece_limit_loss = self.margin_ranking_loss(self.piece_limits, output_summed, torch.ones_like(self.piece_limits))
-        empty_minimum_loss = self.margin_ranking_loss(output_summed[:,12], torch.full_like(output_summed[:,12], 32), torch.ones_like(output_summed[:,12]))
-        # print(f"original: {pieces_output[0,0,:]}\nprocessed: {output_summed[30]}\ntarget: {target_summed[30]}\nloss: {loss[30].tolist()}")
-        if BoardLoss.PRINT_LOSSES:
-            print(f"EACH MINIMUM LOSS {empty_minimum_loss}")
-            print(f"EACH PIECE LIMIT LOSS {piece_limit_loss}")
-        return piece_limit_loss + empty_minimum_loss
-
-
 
 
     def piece_loss_fn(self, pieces_output : torch.Tensor, pieces_target : torch.Tensor) -> torch.Tensor:
@@ -184,39 +132,18 @@ class BoardLoss(nn.Module):
         and target into tensors of shape BATCH_SIZE * 64, 13, where 64 is the number of square on a board, and 13 is the number of 
         piece classes.  
         """
-        # SCALE = 8 # Scale this loss linearly, since this is the most important component
         pieces_output = torch.reshape(pieces_output, (pieces_output.shape[0] * 64, 13))
         pieces_target = torch.reshape(pieces_target, (pieces_target.shape[0] * 64, 13))
         class_labels = torch.argmax(pieces_target, dim = -1)
         loss_unreduced = self.bare_pieces_loss(pieces_output, class_labels) 
-
         weights = torch.sum(pieces_target * self.full_pieces_weight, dim = -1)
         
         loss = torch.mean(loss_unreduced * weights)
         if BoardLoss.PRINT_LOSSES:
-            i = torch.argmax(loss_unreduced)
-            print(f"pieces_output: {pieces_output[i]}\n pieces_target: {pieces_target[i]}\n loss_unr = {loss_unreduced[i]}\n weights = {weights[i]}\n full_weights {self.full_pieces_weight[i]}\nloss= {loss}")
-            print(f"PIECE TYPE {loss}")
+            #i = torch.argmax(loss_unreduced)
+            #print(f"pieces_output: {pieces_output[i]}\n pieces_target: {pieces_target[i]}\n loss_unr = {loss_unreduced[i]}\n weights = {weights[i]}\n full_weights {self.full_pieces_weight[i]}\nloss= {loss}")
+            print(f"PIECE TYPE LOSS {loss}")
         return loss 
-    
-    """
-    def pieces_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
-        # 
-        # Calculates the loss value for piece placement, using 64 distinct CE losses. Revised slightly to parallize generating class labels. 
-        # Since there exists a unique loss function for each piece-square, this part cannot be parallelized. 
-        #
-        pieces_output = TensorBoardUtilV4.tensorToPieceTensors(output)
-        pieces_target = TensorBoardUtilV4.tensorToPieceTensors(target)
-        class_labels = torch.argmax(pieces_target, dim = 2)
-        piece_loss_list = []
-        for i in range(64):
-            # This loop is VERY costly. Should figure out how to parallelize in the future
-            piece_loss_list.append(self.pieces_loss[i](pieces_output[...,i, :], class_labels[i]))
-        
-        loss = torch.stack(piece_loss_list).sum()
-        # print(f"PIECES LOSS {loss}")
-        return loss
-    """
 
 
     def turn_loss_fn(self, output : torch.Tensor, target : torch.Tensor) -> torch.Tensor:
@@ -225,7 +152,7 @@ class BoardLoss(nn.Module):
         """
         turn_output = TensorBoardUtilV4.tensorToTurn(output)
         turn_target = TensorBoardUtilV4.tensorToTurn(target)
-        loss = self.turn_loss(turn_output, turn_target)
+        loss = self.turn_loss(turn_output + 1e-14, turn_target)
         if BoardLoss.PRINT_LOSSES:
             print(f"TURN LOSS {loss}")
         return loss 
@@ -236,7 +163,7 @@ class BoardLoss(nn.Module):
         """
         castling_output = TensorBoardUtilV4.tensorToCastlingRights(output)
         castling_target = TensorBoardUtilV4.tensorToCastlingRights(target)
-        loss = self.castling_loss(castling_output, castling_target)
+        loss = self.castling_loss(castling_output + 1e-14, castling_target)
         if BoardLoss.PRINT_LOSSES:
             print(f"CASTLING LOSS {loss}")
         return loss 
@@ -276,7 +203,7 @@ class BoardLoss(nn.Module):
         pieces_target = TensorBoardUtilV4.tensorToPieceTensors(target)
         out = (
             self.piece_loss_fn(pieces_output, pieces_target) 
-            + self.piece_count_loss_fn(pieces_output)
+            + self.piece_count_loss(pieces_output, pieces_target)
             + self.illegal_pawn_loss_fn(pieces_output)
             + self.turn_loss_fn(output, target)
             + self.castling_loss_fn(output, target)
