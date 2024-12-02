@@ -9,14 +9,15 @@ import os
 
 class BoardAutoencoder(nn.Module):
     LAYER_A = 2048
-    LAYER_B = 2048
-    LAYER_C = 2048
+    LAYER_B = 1024
+    LAYER_C = 512
     TARGET_SIZE = 256
 
     def __init__(self):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(TensorBoardUtilV4.SIZE, BoardAutoencoder.LAYER_A),
+            nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_A, BoardAutoencoder.LAYER_B),
             nn.ReLU(),
@@ -30,6 +31,7 @@ class BoardAutoencoder(nn.Module):
             nn.Linear(BoardAutoencoder.LAYER_C, BoardAutoencoder.LAYER_B),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_B, BoardAutoencoder.LAYER_A),
+            nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_A, TensorBoardUtilV4.SIZE),
         )

@@ -48,6 +48,11 @@ class TensorBoardUtilV4():
                 return offset + i
             i += 1
         raise Exception("Invalid Piece Given")
+    
+    @staticmethod
+    def indexToPieceSymbol(i : int):
+        symbols = ["P", "N", "B", "R", "Q", "K", "p", "n", "b", "r", "q", "k", "-"]
+        return symbols[i]
 
     @staticmethod
     def _pieceToBoolList(piece : Optional[chess.Piece]) -> list[bool]:

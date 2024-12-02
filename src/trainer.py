@@ -8,6 +8,7 @@ import pickle
 from math import inf
 from typing import Optional, Callable
 from dataloader import load_tensor as dataloader_load_tensor
+import json
 
 class SelfSupervisedTrainer:
     DEVICE = "mps"
@@ -127,13 +128,14 @@ class SelfSupervisedTrainer:
 
 
     def save(self):
-        pickle.dump(self.losses, open(f"losses/{self.model_name}", "wb"))
+        with open(f"losses/{self.model_name}.json", "w") as f:
+            f.write(json.dumps(self.losses))
         torch.save(self.model.state_dict(),f"models/{self.model_name}.pth")
 
     def load_epoch_and_loss(self):
         if self.model_name in os.listdir("losses"):
-            with open(f"losses/{self.model_name}", "rb") as f:
-                self.losses = pickle.load(f)
+            with open(f"losses/{self.model_name}.json", "r") as f:
+                self.losses = json.loads(f.read())
             self.starting_epoch = len(self.losses[SelfSupervisedTrainer.TESTING_STR]) - 1
             return 
         self.starting_epoch = 0

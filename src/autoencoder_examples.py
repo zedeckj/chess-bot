@@ -36,15 +36,19 @@ def run_and_show(model : ProductionAutoencoder, board : chess.Board):
     castling_tensor2 = torch.sigmoid(TensorBoardUtilV4.tensorToCastlingRights(decoded))
     pieces_decoded = TensorBoardUtilV4.tensorToPieceTensors(decoded)
     pieces_probs = torch.softmax(pieces_decoded, dim = -1)
-    print(pieces_probs.shape)
+    
     discrete = TensorBoardUtilV4.discretizeTensor(decoded)
+    true_pieces = TensorBoardUtilV4.tensorToPieceTensors(tensor)
+
     board2 = TensorBoardUtilV4.toBoard(discrete)
     print(f"\nREAL FEN: {board.fen(en_passant = 'fen')}\nPREDICTED FEN: {board2.fen(en_passant = 'fen')}\n{board}\n\n\n{board2}")
     print(f"\nREAL CASTLING: {castling_tensor1.tolist()}\nPREDICTED CASTLING: {castling_tensor2.tolist()}")
+    print(f"\nPIECE COUNTS: {torch.sum(true_pieces, dim = 1)}\nPREDICTED PROBS: {torch.sum(pieces_probs, dim = 1)}\n\n")
+    piece_array = []
     if VERBOSE:
         for i in range(64):
             print(f"Square {i} has a {board.piece_at(i)}")
-            print([f"{p * 100:.2f}%" for p in pieces_probs[0,i,:].tolist()])
+            print([f"{TensorBoardUtilV4.indexToPieceSymbol(int(j))}: {p * 100:.2f}%" for j,p in enumerate(pieces_probs[0,i,:].tolist())])
 
 def main():
     model = ProductionAutoencoder()
