@@ -1,1 +1,0 @@
-def heuristic(board : chess.Board):

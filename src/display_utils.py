@@ -6,14 +6,9 @@ from src.board_final import BoardGenerator
 
 
 class BoardDisplayer:
-    def __init__(self):
-        self.displayed = False
 
-    def display(self, board : chess.Board):
-        #♕ 	♖ 	♗ 	♘ 	♙ 	♚ 	♛ 	♜ 	♝ 	♞ 	♟
-        if self.displayed:
-            self.reset_screen()
-        self.displayed = True
+    @staticmethod
+    def show(board : chess.Board):
         piece_dic = {
             (chess.KING, chess.WHITE): "♔",
             (chess.QUEEN, chess.WHITE): "♕",
@@ -46,11 +41,13 @@ class BoardDisplayer:
             print("\x1b[0m")
         print("")
 
-    def reset_screen(self):
+    @staticmethod
+    def remove():
         print("\x1b[9A", end = "\r")
 
-import time
-displayer = BoardDisplayer()
-for board in BoardGenerator(100):
-    displayer.display(board)
-    time.sleep(0.1)
+if __name__ == "__main__":
+    import time
+    for board in BoardGenerator(100):
+        BoardDisplayer.show(board)
+        time.sleep(0.1)
+        BoardDisplayer.remove()

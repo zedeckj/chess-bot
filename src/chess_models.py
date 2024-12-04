@@ -17,7 +17,7 @@ class BoardAutoencoder(nn.Module):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(TensorBoardUtilV4.SIZE, BoardAutoencoder.LAYER_A),
-            nn.Dropout(p=0.5),
+            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_A, BoardAutoencoder.LAYER_B),
             nn.ReLU(),
@@ -31,7 +31,6 @@ class BoardAutoencoder(nn.Module):
             nn.Linear(BoardAutoencoder.LAYER_C, BoardAutoencoder.LAYER_B),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_B, BoardAutoencoder.LAYER_A),
-            nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(BoardAutoencoder.LAYER_A, TensorBoardUtilV4.SIZE),
             nn.ReLU()
@@ -63,6 +62,35 @@ class BoardAutoencoder(nn.Module):
     def decodeToBoard(self, tensor: torch.Tensor) -> chess.Board:
         return TensorBoardUtilV4.toBoard(self.full_decode(tensor))
     
+
+class ComplexAutoencoder(BoardAutoencoder):
+    LAYER_A = 4096
+    LAYER_B = 2048
+    LAYER_C = 1024
+    TARGET_SIZE = 128
+
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(TensorBoardUtilV4.SIZE, BoardAutoencoder.LAYER_A),
+            nn.Dropout(p=0.1),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_A, BoardAutoencoder.LAYER_B),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_B, BoardAutoencoder.LAYER_C),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_C, BoardAutoencoder.TARGET_SIZE),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(BoardAutoencoder.TARGET_SIZE, BoardAutoencoder.LAYER_C),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_C, BoardAutoencoder.LAYER_B),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_B, BoardAutoencoder.LAYER_A),
+            nn.ReLU(),
+            nn.Linear(BoardAutoencoder.LAYER_A, TensorBoardUtilV4.SIZE),
+            nn.ReLU()
+        )
 
 
 """
@@ -96,7 +124,7 @@ class SmallerAutoencoder(BoardAutoencoder):
 
 class ProductionAutoencoder(BoardAutoencoder):
 
-    MODEL_DIR = "autoencoder.pth"
+    MODEL_DIR = "autoencoder6.pth"
 
     def __init__(self):
         super().__init__()

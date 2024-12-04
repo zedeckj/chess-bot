@@ -6,9 +6,11 @@ import sys
 from tqdm import tqdm
 import pickle
 from math import inf
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from dataloader import load_tensor as dataloader_load_tensor
 import json
+
+from src.board_final import TensorBoardUtilV4
 
 class SelfSupervisedTrainer:
     DEVICE = "mps"
@@ -26,10 +28,12 @@ class SelfSupervisedTrainer:
                  datashape : list[int],
                  preprocessor : Optional[nn.Module] = None,
                  loss_fn_constructor : Optional[Callable[[torch.Tensor], nn.Module]] = None,
+                 test_callback : Optional[Callable[[torch.Tensor, torch.Tensor], Any]] = None,
                  loss_fn : Optional[nn.Module] = None,
                  base_learning_rate : float = 1e-4,
                  batch_size : int = 64,
                  device : str = "mps"):
+        self.test_callback = test_callback
         self.device = device
         self.preprocessor = preprocessor
         self.batch_size = batch_size
@@ -82,18 +86,22 @@ class SelfSupervisedTrainer:
         self.model.train()
         iterable = tqdm(range(len(dataset)))
         total_loss = 0
+        predictions = []
         for i in iterable:
             X = dataset[i]
             if self.preprocessor != None:
                 X = self.preprocessor(X)
-            predictions = self.model(X)
-            loss = self.loss_fn(predictions, X)
+            pred = self.model(X)
+            loss = self.loss_fn(pred, X)
+            predictions.append(pred)
             total_loss += loss.item()
             loss.backward() 
             self.optimizier.step()
             self.optimizier.zero_grad()
             if i % 10 == 0 or len(dataset) - 1 == i:
                 iterable.set_description(f"Epoch {epoch} section {sec} loss {total_loss:.4f}, prevous was {last_total:.4f}")
+        if sec % 10 == 0 and sec != 0 and self.test_callback != None:
+            self.test_callback(torch.cat(predictions), torch.reshape(dataset, (dataset.shape[0] * dataset.shape[1], dataset.shape[2])))
         return total_loss
         
 
@@ -101,16 +109,20 @@ class SelfSupervisedTrainer:
         self.model.eval()
         iteratable = tqdm(range(len(dataset)))
         total_loss = 0
+        predictions = []
         with torch.no_grad():
             for i in iteratable:
                 X = dataset[i]
                 if self.preprocessor != None:
                     X = self.preprocessor(X)
-                evaluations = self.model(X)
-                loss = self.loss_fn(evaluations, X)
+                pred = self.model(X)
+                predictions.append(pred)
+                loss = self.loss_fn(pred, X)
                 total_loss += loss.item()
                 if i % 10 == 0 or len(dataset) - 1 == i:
                     iteratable.set_description(f"Testing section {section} loss {total_loss:.4f}")
+        if self.test_callback != None:
+            self.test_callback(torch.cat(predictions), torch.reshape(dataset, (dataset.shape[0] * dataset.shape[1], dataset.shape[2])))
         return total_loss
 
     def run_test(self):
@@ -137,20 +149,19 @@ class SelfSupervisedTrainer:
         if f"{self.model_name}.json" in os.listdir("losses"):
             with open(f"losses/{self.model_name}.json", "r") as f:
                 self.losses = json.loads(f.read())
+                print("Loaded losses data")
             self.starting_epoch = len(self.losses[SelfSupervisedTrainer.TESTING_STR]) - 1
             return 
         self.starting_epoch = 0
-        self.losses = {SelfSupervisedTrainer.TESTING_STR : [], SelfSupervisedTrainer.TRAINING_STR: [], SelfSupervisedTrainer.CURRENT_FILE_STR: 0}
-        
+        self.losses = {SelfSupervisedTrainer.TESTING_STR : [], SelfSupervisedTrainer.TRAINING_STR: [[]], SelfSupervisedTrainer.CURRENT_FILE_STR: 0}
+                    
 
-            
 
     def run(self):
         MAX_EPOCHS = 1000
         starting_index = self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] 
-        if starting_index == 0:
+        if self.starting_epoch == 0 and starting_index == 0:
             self.run_test()
-            self.losses[SelfSupervisedTrainer.TRAINING_STR].append([])
         for epoch in range(self.starting_epoch, MAX_EPOCHS):
             iterable = range(starting_index, len(self.training_files))
             for i in iterable:
@@ -168,6 +179,7 @@ class SelfSupervisedTrainer:
             self.run_test()
             testing_loss = self.losses[SelfSupervisedTrainer.TESTING_STR][-1]
             last_testing_loss = self.losses[SelfSupervisedTrainer.TESTING_STR][-2]
+            self.losses[SelfSupervisedTrainer.TRAINING_STR].append([])
             self.losses[SelfSupervisedTrainer.CURRENT_FILE_STR] = 0
             starting_index = 0
             self.save()

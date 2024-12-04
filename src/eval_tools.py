@@ -35,7 +35,6 @@ def en_passant_accuarcy(discrete_output: torch.Tensor, discrete_target: torch.Te
     """
     en_passant_output = TensorBoardUtilV4.tensorToEnPassant(discrete_output)
     en_passant_target = TensorBoardUtilV4.tensorToEnPassant(discrete_output)
-    print(en_passant_target.shape)
     # Shape is [N, 65]
     en_passant_output = torch.argmax(en_passant_output, dim = 1)
     en_passant_target = torch.argmax(en_passant_target, dim = 1)
@@ -62,8 +61,19 @@ def en_passant_accuarcy(discrete_output: torch.Tensor, discrete_target: torch.Te
 def turn_accuracy(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
     output_turns = TensorBoardUtilV4.tensorToTurn(discrete_output)
     target_turns = TensorBoardUtilV4.tensorToTurn(discrete_target)
+    unreduced = torch.eq(output_turns.bool(), target_turns.bool()).float()
+    return torch.sum(unreduced) / output_turns.shape[0]
 
+def ep_accuarcy(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
+    output_ep = TensorBoardUtilV4.tensorToEnPassant(discrete_output)
+    target_ep = TensorBoardUtilV4.tensorToEnPassant(discrete_target)
+    print(output_ep.shape)
+    return torch.sum(torch.eq(output_ep.bool(),target_ep.bool()))/(target_ep.shape[0] * 65)
 
+def clock_accuarcy(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
+    output_clocks = TensorBoardUtilV4.tensorToTimers(discrete_output)
+    target_clocks = TensorBoardUtilV4.tensorToTimers(discrete_target)
+    return torch.mean(torch.lt(torch.abs(output_clocks - target_clocks), 2).float())
 
 def metrics_tensor(discrete_output : torch.Tensor, discrete_target : torch.Tensor):
 
@@ -92,10 +102,11 @@ def metrics_tensor(discrete_output : torch.Tensor, discrete_target : torch.Tenso
     false_negatives = torch.zeros(13, device=device)
     """
 
-    true_positives = torch.logical_and(piece_output, piece_target).float().sum(dim = 1)
-    false_positives = torch.logical_and(piece_output, torch.logical_not(piece_target)).float().sum(dim = 1)
-    false_negatives = torch.logical_and(torch.logical_not(piece_output), piece_target).float().sum(dim = 1)
     
+    true_positives = torch.logical_and(piece_output, piece_target).float().sum(dim = 1).sum(dim = 0)
+    false_positives = torch.logical_and(piece_output, torch.logical_not(piece_target)).float().sum(dim = 1).sum(dim = 0)
+    false_negatives = torch.logical_and(torch.logical_not(piece_output), piece_target).float().sum(dim = 1).sum(dim = 0)
+
     """
     for i in range(64):
         square_output = piece_output[...,i, :]
@@ -106,49 +117,41 @@ def metrics_tensor(discrete_output : torch.Tensor, discrete_target : torch.Tenso
         false_positives += torch.logical_and(square_output, torch.logical_not(square_target)).float().sum(dim = 0)
         false_negatives += torch.logical_and(torch.logical_not(square_output), square_target).float().sum(dim = 0)"""
 
-    castling_output = TensorBoardUtilV4.tensorToCastlingRights(discrete_output).unsqueeze(dim = 0)
-    castling_target = TensorBoardUtilV4.tensorToCastlingRights(discrete_target).unsqueeze(dim = 0)
+    castling_output = TensorBoardUtilV4.tensorToCastlingRights(discrete_output)
+    castling_target = TensorBoardUtilV4.tensorToCastlingRights(discrete_target)
 
 
 
 
     
-    true_positives_castling = torch.logical_and(castling_output, castling_target).float().sum(dim = 1)
-    false_positives_castling = torch.logical_and(castling_output, torch.logical_not(castling_target)).float().sum(dim = 1)
-    false_negatives_castling = torch.logical_and(torch.logical_not(castling_output), castling_target).float().sum(dim = 1)
-    true_positives = torch.cat([true_positives, true_positives_castling], dim = 1)
-    false_positives = torch.cat([false_positives, false_positives_castling], dim = 1)
-    false_negatives = torch.cat([false_negatives, false_negatives_castling], dim = 1)
+    true_positives_castling = torch.logical_and(castling_output, castling_target).float().sum(dim = 0)
+    false_positives_castling = torch.logical_and(castling_output, torch.logical_not(castling_target)).float().sum(dim = 0)
+    false_negatives_castling = torch.logical_and(torch.logical_not(castling_output), castling_target).float().sum(dim = 0)
+    print(true_positives_castling, false_positives_castling, false_negatives_castling)
+    true_positives = torch.cat([true_positives, true_positives_castling])
+    false_positives = torch.cat([false_positives, false_positives_castling])
+    false_negatives = torch.cat([false_negatives, false_negatives_castling])
 
     recall_tensor = true_positives / (true_positives + false_negatives)
     precision_tensor = true_positives / (true_positives + false_positives)
     return recall_tensor, precision_tensor
 
-"""
 def display_precision_recall(real_output : torch.Tensor, discrete_target : torch.Tensor):
-    print(real_output.shape)
     discrete_output = TensorBoardUtilV4.discretizeTensor(real_output)
-    recall_tensor, precision_tensor = precision_recall(discrete_output, discrete_target)
+    recall_tensor, precision_tensor = metrics_tensor(discrete_output, discrete_target)
     index_to_name = ["White Pawn", "White Knight", "White Bishop", "White Rook", "White Queen", "White King", 
                      "Black Pawn", "Black Knight", "Black Bishop", "Black Rook", "Black Queen", "Black King",
                      "Black Space", "White Kingside Castling", "White Queenside Castling", "Black Kingside Castling",
                      "Black Queenside Castling",]
     for i in range(17):
-        print(f"{index_to_name[i]} Precision: {precision_tensor[0].item()*100:2f}%")
-        print(f"{index_to_name[i]} Recall: {recall_tensor[0].item() * 100:2f}%")
-    
-    print(f"No EP Accuarcy: {no_ep_acc*100:2f}%")
-    print(f"En-Passant Accuarcy: {ep_acc*100:2f}%")
-    """
+        print(f"{index_to_name[i]} Precision: {precision_tensor[i].item()*100:2f}%")
+        print(f"{index_to_name[i]} Recall: {recall_tensor[i].item() * 100:2f}%")
+    ep_acc = ep_accuarcy(discrete_output, discrete_target)
+    print(f"En-Passant Accuarcy: {ep_acc.item()*100:2f}%")
+    turn_acc = turn_accuracy(discrete_output, discrete_target)
+    print(f"Turn Accuarcy: {turn_acc.item()*100:2f}%")
+    clock_acc = clock_accuarcy(discrete_output, discrete_target)
+    print(f"Clock Accuarcy: {clock_acc.item()*100:2f}%")
+    #rint(f"En-Passant Accuarcy: {ep_acc*100:2f}%")
 
-import unittest
 
-class TestTensorBoard(unittest.TestCase):
-
-
-    def test_prec_recall_basic(self):
-        board = chess.Board()
-        tensor1 = TensorBoardUtilV4.fromBoard(chess.Board()).to("mps")
-        
-if __name__ == "__main__":
-    unittest.main()

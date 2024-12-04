@@ -57,5 +57,5 @@ class GameRunner(nn.Module):
 
 
 if __name__ == "__main__":
-    game_runner = GameRunner(NaiveChessAgent(look_ahead=2), NeuralAgent(look_ahead=2))
+    game_runner = GameRunner(NaiveChessAgent(look_ahead=2), RandomAgent(look_ahead=1))
     print(game_runner.run(True))

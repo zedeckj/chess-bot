@@ -1,8 +1,11 @@
 import dis
 import random
 import sys
+
+
 sys.path.append("./")
 from src.board_final import BoardGenerator, TensorBoardUtilV4
+from src.torch_utils import custom_sigmoid
 from src.chess_models import ProductionAutoencoder
 import unittest
 import chess
@@ -25,6 +28,12 @@ class TestBoardLoss(unittest.TestCase):
         tensor = TensorBoardUtilV4.fromBoard(board)
         self.data
 
+def visual_compare(output : torch.Tensor, target : torch.Tensor) :
+    discrete = TensorBoardUtilV4.discretizeTensor(output)
+    output_board = TensorBoardUtilV4.toBoard(discrete)
+    target_board = TensorBoardUtilV4.toBoard(target)
+    
+
 def run_and_show(model : ProductionAutoencoder, board : chess.Board):
     VERBOSE = False
     model.eval()
@@ -36,11 +45,11 @@ def run_and_show(model : ProductionAutoencoder, board : chess.Board):
     castling_tensor1 = TensorBoardUtilV4.tensorToCastlingRights(tensor)
     castling_tensor2 = torch.sigmoid(TensorBoardUtilV4.tensorToCastlingRights(decoded))
     pieces_decoded = TensorBoardUtilV4.tensorToPieceTensors(decoded)
-    pieces_probs = torch.softmax(pieces_decoded, dim = -1)
-    pieces_probs = torch.clamp((pieces_probs - 1/13), min = 0) * 13/(12)  
-    discrete = TensorBoardUtilV4.discretizeTensor(decoded)
     true_pieces = TensorBoardUtilV4.tensorToPieceTensors(tensor)
+    pieces_probs = torch.softmax(pieces_decoded, dim = -1) ** 1/2 * torch.logical_not(true_pieces)
+    discrete = TensorBoardUtilV4.discretizeTensor(decoded)
 
+    #pieces_probs = torch.clamp(torch.subtract(pieces_probs, 1/13), min = 0)
     board2 = TensorBoardUtilV4.toBoard(discrete)
     print(f"\nREAL FEN: {board.fen(en_passant = 'fen')}\nPREDICTED FEN: {board2.fen(en_passant = 'fen')}\n{board}\n\n\n{board2}")
     print(f"\nREAL CASTLING: {castling_tensor1.tolist()}\nPREDICTED CASTLING: {castling_tensor2.tolist()}")
@@ -49,13 +58,12 @@ def run_and_show(model : ProductionAutoencoder, board : chess.Board):
     if VERBOSE:
         for i in range(64):
             print(f"Square {i} has a {board.piece_at(i)}")
-            print([f"{TensorBoardUtilV4.indexToPieceSymbol(int(j))}: {p * 100:.2f}%" for j,p in enumerate(pieces_probs[0,i,:].tolist())])
+            print([f"{TensorBoardUtilV4.indexToPieceSymbol(int(j))}: {p * 100:.2f},{100 * pieces_probs[0,i,j]:.2f}%" for j,p in enumerate(pieces_probs[0,i,:].tolist())])
 
 def main():
     model = ProductionAutoencoder()
     for board in BoardGenerator(10000):
         run_and_show(model, board)
-
 
 main()
 

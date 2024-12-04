@@ -8,6 +8,7 @@ sys.path.append("./")
 from src.board_final import TensorBoardUtilV4
 from src.autoencoder import BoardAutoencoder, BoardLoss
 from src.trainer import SelfSupervisedTrainer
+
 class TestBoardLoss(unittest.TestCase):
 
     def setUp(self) -> None:

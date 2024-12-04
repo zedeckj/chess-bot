@@ -242,8 +242,6 @@ class NaiveChessAgent(AbstractChessAgent):
         return MOBILITY_SCALE * (white_mobility - black_mobility)
 
 
-    def _double_pawns(self, board : chess.Board) -> float:
-        board.
 
 
     def evaluate(self, board: chess.Board) -> float:
@@ -252,7 +250,7 @@ class NaiveChessAgent(AbstractChessAgent):
                 return -INF
             return INF
         else:
-            return self._calculate_material(board)
+            return self._material(board) + self._mobility(board)
         
     def get_name(self) -> str:
         return "Naive Agent"
