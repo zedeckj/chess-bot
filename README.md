@@ -6,6 +6,10 @@ Contains a simple demonstration of `Autoencoder128` and `Autoencoder256`.
 
 ### src folder
 
+
+#### board_final.py
+Provides the static class `TensorBoardUtilV4`, which provides various functions for encoding, decoding, and managing chess positions in a discrete tensor representation
+
 #### chess_models.py 
 Provides definitions of all PyTorch networks trained in this project. 
 
