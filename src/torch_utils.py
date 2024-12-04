@@ -15,7 +15,7 @@ def custom_sigmoid(tensor : torch.Tensor) -> torch.Tensor:
 
 def softplus(tensor : torch.Tensor) -> torch.Tensor:
     """
-    \frac{\ln\left(1+e^{\left(\frac{1}{0.84}x-0.2\right)k}\right)}{k}
+    \\frac{\\ln\\left(1+e^{\\left(\\frac{1}{0.84}x-0.2\\right)k}\\right)}{k}
     """
     K = 30
     return torch.log(1 + torch.exp(1/84 * tensor - 0.2) ** K) / K

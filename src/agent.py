@@ -20,6 +20,11 @@ INF = 1e6
 
 class AbstractChessAgent(ABC):
 
+    """
+    A Chess playing agent with no defined evaluation function. This class is useful for implementing different evaluation functions without 
+    having to worry about the implementation of searching. 
+    """
+
     def __init__(self, look_ahead):
         self.look_ahead = look_ahead
         self.cache = {}
@@ -150,39 +155,6 @@ class AbstractChessAgent(ABC):
             board.pop()
         i = selection_function(evals)
         return moves[i]
-    
-
-
-    """
-    def maxi(self,  board : chess.Board, depth : int, alpha : float = -INF, beta : float = INF) -> float:
-        if depth == 0:
-            return self.evaluate(board)
-        value = -INF
-        moves = list(board.legal_moves)
-        for move in moves:
-            board.push(move)
-            value = max(self.mini(board, depth - 1, alpha, beta), value)
-            board.pop()
-            if value > beta:
-                break
-            alpha = max(value, alpha)
-        return value
-    
-    def mini(self, board : chess.Board, depth : int, alpha : float = -INF, beta : float = INF) -> float:
-        if depth == 0:
-            return self.evaluate(board)
-        value = INF #
-        moves = list(board.legal_moves)
-        for move in moves:
-            board.push(move)
-            value = min(self.maxi(board, depth - 1, alpha, beta), value)
-            board.pop()
-            if value < alpha:
-                break
-            beta = min(value, beta)
-        return value
-    """
-
 
 
 
@@ -205,6 +177,10 @@ class AbstractChessAgent(ABC):
 
 
 class NaiveChessAgent(AbstractChessAgent):
+
+    """
+    An example AbstractChessAgent which uses a very simple evaluation function.
+    """
 
 
     def _material(self, board : chess.Board) -> float: 
@@ -265,10 +241,16 @@ class RandomAgent(AbstractChessAgent):
         return "Random Agent"
 
 class NeuralAgent(AbstractChessAgent):
+
+    """
+    AbstractChessAgent which utilizes the currently untrained `Evaluator` class as its evaluation function. 
+    """
+
+
     def __init__(self, look_ahead : int):
         super().__init__(look_ahead)
-        self.evaluator = ProductionEvaluator()
-        self.autoencoder = ProductionAutoencoder()
+        self.evaluator = BoardAutoencoder()
+        self.autoencoder = Evaluator()
 
     def evaluate(self, board: chess.Board) -> float:
         return self.evaluator(self.autoencoder.encodeFromBoard(board)).item()
