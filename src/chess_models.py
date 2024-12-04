@@ -122,23 +122,30 @@ class SmallerAutoencoder(BoardAutoencoder):
         )
 """
 
-class ProductionAutoencoder(BoardAutoencoder):
+class Autoencoder128(ComplexAutoencoder):
+
+
+    def __init__(self):
+        super().__init__()
+        assert("autoencoder128.pth" in os.listdir("models"))
+        self.load_state_dict(torch.load(f"models/autoencoder128.pth", weights_only=True))
+
+
+class Autoencoder256(BoardAutoencoder):
 
     MODEL_DIR = "autoencoder6.pth"
 
     def __init__(self):
         super().__init__()
-        assert(ProductionAutoencoder.MODEL_DIR in os.listdir("models"))
-        self.load_state_dict(torch.load(f"models/{ProductionAutoencoder.MODEL_DIR}", weights_only=True))
-
-
+        assert("autoencoder256.pth" in os.listdir("models"))
+        self.load_state_dict(torch.load(f"models/autoencoder256.pth", weights_only=True))
 
 class Evaluator(nn.Module):
 
     def __init__(self):
         super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(ProductionAutoencoder.TARGET_SIZE, 2048),
+            nn.Linear(Autoencoder256.TARGET_SIZE, 2048),
             nn.ReLU(),
             nn.Linear(2048, 2048),
             nn.ReLU(),

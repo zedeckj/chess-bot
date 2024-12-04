@@ -18,7 +18,7 @@ import os
 import random
 from board_final import TensorBoardUtilV4
 import mmap
-from chess_models import BoardAutoencoder, ProductionAutoencoder
+from chess_models import Autoencoder256
 SMALL_TENSORS = "board_tensorsV3/2013-01-board-tensors"
 
 
@@ -167,7 +167,7 @@ class FullBoardReader(AbstractBoardReader):
 class EncodedBoardReader(AbstractBoardReader):
 
     def __init__(self):
-        self.encoder = BoardAutoencoder().encoder
+        self.encoder = Autoencoder256().encoder
 
     def boardToTensor(self, board: chess.Board):
         return self.encoder(TensorBoardUtilV4.fromBoard(board))
@@ -190,7 +190,7 @@ class MoveSelectionReader(AbstractReader):
 
     def __init__(self, in_path : str, out_dir : str):
         super().__init__(in_path, out_dir)
-        self.autoencoder = ProductionAutoencoder()
+        self.autoencoder = Autoencoder256()
 
     def format_games(self, game : pgn.Game) -> Optional[list[tuple[bool, torch.Tensor]]]:
         if game.headers["Result"] == "1-0":
@@ -252,7 +252,7 @@ class MoveSelectionReader(AbstractReader):
             for fname in files:
                 with open(fname, "r") as f:
                     buffer.write(f.read() + "\n")
-        if self.out_dir not in os.listdir(f"{BoardReader.TENSORS_DIR}"):
+        if self.out_dir not in os.listdir(f"{AbstractBoardReader.TENSORS_DIR}"):
             os.mkdir(f"{AbstractReader.TENSORS_MOVES_DIR}/{self.out_dir}")
         assert(len(os.listdir(f"{AbstractReader.TENSORS_MOVES_DIR}/{self.out_dir}")) == 0)
         for i in range(PROCS):

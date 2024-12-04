@@ -29,7 +29,7 @@ class BoardDisplayer:
         for i in range(8):
             for j in range(8):
                 ansii = f"\x1b[48;5;{229 if light_background else 178}m"
-                square = 7 * (8 - i) + j
+                square = 8 * (7 - i) + j
                 piece = board.piece_at(square)
                 if piece == None:
                     print(f"{ansii} ", end = " ")

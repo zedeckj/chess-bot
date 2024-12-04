@@ -12,7 +12,7 @@ import numpy as np
 import random
 import sys
 sys.path.append("./")
-from src.chess_models import ProductionAutoencoder, ProductionEvaluator
+from src.chess_models import BoardAutoencoder, Evaluator
 
 
 INF = 1e6
@@ -260,7 +260,6 @@ class RandomAgent(AbstractChessAgent):
 
     def evaluate(self, board: chess.Board) -> float:
         return random.random()
-        
 
     def get_name(self) -> str:
         return "Random Agent"
