@@ -8,7 +8,7 @@ import os
 import sys
 
 sys.path.append("./")
-from src.eval_tools import display_precision_recall
+from src.eval_utils import display_precision_recall
 from src.trainer import SelfSupervisedTrainer
 import tqdm
 from src.chess_models import BoardAutoencoder, ComplexAutoencoder
@@ -332,7 +332,7 @@ if __name__ == "__main__":
         training_files,
         testing_files,
         ComplexAutoencoder(),
-        "autoencoder-complex",
+        "autoencoder128",
         [TensorBoardUtilV4.SIZE],
         loss_fn_constructor = BoardLoss,
         batch_size= 2048,
@@ -341,7 +341,8 @@ if __name__ == "__main__":
     )
     if TEST_ONLY:
         test_set = trainer.load_testing(0)
-        trainer.test_single(test_set, 0)
+        if test_set != None:
+            trainer.test_single(test_set, 0)
     else:
         trainer.run()
 

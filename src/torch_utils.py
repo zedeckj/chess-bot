@@ -19,3 +19,14 @@ def softplus(tensor : torch.Tensor) -> torch.Tensor:
     """
     K = 30
     return torch.log(1 + torch.exp(1/84 * tensor - 0.2) ** K) / K
+
+def argmax_onehot(tensor : torch.Tensor):
+    # Find the indices of the maximum values along the last dimension
+    indices = tensor.argmax(dim=-1)
+    
+    # Create a tensor of zeros with the same shape as the input tensor
+    output = torch.zeros_like(tensor)
+    
+    # Use scatter_ to place 1s at the indices of the maximum values
+    output.scatter_(-1, indices.unsqueeze(-1), 1)
+    return output

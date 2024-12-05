@@ -8,7 +8,7 @@ from tqdm import tqdm
 import sys
 sys.path.append("./")
 from src.board_final import BoardGenerator
-from src.chess_models import Evaluator, ProductionAutoencoder
+from src.chess_models import Evaluator, BoardAutoencoder
 from src.dataloader import load_tensor as dataloader_load_tensor
 import pickle 
 import chess
@@ -45,7 +45,7 @@ class EvaluatorPretrainer:
         self.model = model
         self.optimizer = SGD(self.model.parameters(), EvaluatorTrainer.LEARNING_RATE)
         self.loss_fn = nn.MSELoss()
-        self.encoder = ProductionAutoencoder()
+        self.encoder = BoardAutoencoder()
 
 
 
@@ -106,7 +106,7 @@ class EvaluatorTrainer:
     BATCH_SIZE = 64
     DEVICE = "mps"
     LEARNING_RATE = 1e-4 * (BATCH_SIZE/8)
-    DATASHAPE = [2, ProductionAutoencoder.TARGET_SIZE]
+    DATASHAPE = [2, BoardAutoencoder.TARGET_SIZE]
     MODEL_NAME = "deep-evaluator-mrl2"
 
     def __init__(self, training_files : list[str], testing_files : list[str]):

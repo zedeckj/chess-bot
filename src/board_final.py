@@ -12,7 +12,7 @@ import torch.share
 import sys
 sys.path.append("./")
 
-from src.test_torch import TorchUtils
+from src.torch_utils import argmax_onehot
 
 class TensorBoardUtilV4():
     """
@@ -170,10 +170,10 @@ class TensorBoardUtilV4():
         castling_tensor = TensorBoardUtilV4.tensorToCastlingRights(tensor)
         en_passant_tensor = TensorBoardUtilV4.tensorToEnPassant(tensor)
         clock_tensor = TensorBoardUtilV4.tensorToTimers(tensor)
-        discrete_pieces = torch.reshape(TorchUtils.argmax_onehot(pieces_tensor), (pieces_tensor.shape[0], TensorBoardUtilV4.PIECE_COMPONENT_SIZE * 64))
+        discrete_pieces = torch.reshape(argmax_onehot(pieces_tensor), (pieces_tensor.shape[0], TensorBoardUtilV4.PIECE_COMPONENT_SIZE * 64))
         discrete_turn = torch.round(torch.clamp(turn_tensor, max = 1) - 1e-1)
         discrete_castling = torch.round(torch.sigmoid(castling_tensor) - 1e-1)
-        discrete_en_passant = TorchUtils.argmax_onehot(en_passant_tensor)
+        discrete_en_passant = argmax_onehot(en_passant_tensor)
         discrete_clock = torch.round(clock_tensor)
         return torch.cat([discrete_pieces, discrete_turn, discrete_castling, discrete_en_passant, discrete_clock], dim = 1)
 
@@ -464,7 +464,7 @@ class TestTensorBoard(unittest.TestCase):
             for board1 in BoardGenerator(10):
                 tensor1 = TensorBoardUtilV4.fromBoard(board1)
                 pieces_tensor = TensorBoardUtilV4.tensorToPieceTensors(tensor1)
-                pieces_tensor = torch.reshape(TorchUtils.argmax_onehot(pieces_tensor), (pieces_tensor.shape[0], TensorBoardUtilV4.PIECE_COMPONENT_SIZE * 64))
+                pieces_tensor = torch.reshape(argmax_onehot(pieces_tensor), (pieces_tensor.shape[0], TensorBoardUtilV4.PIECE_COMPONENT_SIZE * 64))
                 turn_tensor = TensorBoardUtilV4.tensorToTurn(tensor1)
                 en_passant_tensor = TensorBoardUtilV4.tensorToEnPassant(tensor1)
                 clock_tensor = TensorBoardUtilV4.tensorToTimers(tensor1)
