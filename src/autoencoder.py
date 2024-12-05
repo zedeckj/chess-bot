@@ -320,7 +320,7 @@ def load_train_test() -> tuple[list[str], str]:
     return training_files, test_file
 
 if __name__ == "__main__":
-    TEST_ONLY = True
+    TEST_ONLY = False
 
     PATH = "board_tensorsV3/2016-03"
     files = [f"{PATH}/{file}" for file in os.listdir(PATH) if ".tnsrs" in file]

@@ -13,21 +13,25 @@ def random_board():
 def ppstr_list(l : list):
     return f"[{l[0]}" + f", ".join([str(v) for v in l[1:5]])+ "...]"
 
-def show_random(use_256 : bool):
-    autoencoder = Autoencoder256() if use_256 else Autoencoder128()
-    print(f"autoencoder{256 if use_256 else 128} results")
+def show_random():
+    autoencoder256 = Autoencoder256()
+    autoencoder128 = Autoencoder128()
     board = random_board()
-    encoded = autoencoder.encodeFromBoard(board)
-    decoded_board = autoencoder.decodeToBoard(encoded)
+    encoded128 = autoencoder128.encodeFromBoard(board)
+    encoded256 = autoencoder256.encodeFromBoard(board)
+    decoded_board128 = autoencoder128.decodeToBoard(encoded128)
+    decoded_board256 = autoencoder256.decodeToBoard(encoded256)
     print(f"INPUT FEN: {board.fen(en_passant= 'fen')}")
     BoardDisplayer.show(board)
-    print(f"ENCODED TENSOR: \n{ppstr_list(encoded.tolist()[0])}\n")
-    print(f"DECODED FEN: {decoded_board.fen(en_passant= 'fen')}")
-    BoardDisplayer.show(decoded_board)
+    print(f"ENCODED TENSOR 128: \n{ppstr_list(encoded128.tolist()[0])}\n")
+    print(f"ENCODED TENSOR 256: \n{ppstr_list(encoded256.tolist()[0])}\n")
+    print(f"DECODED 128 FEN: {decoded_board128.fen(en_passant= 'fen')}")
+    BoardDisplayer.show(decoded_board128)
+    print(f"DECODED 256 FEN: {decoded_board256.fen(en_passant= 'fen')}")
+    BoardDisplayer.show(decoded_board256)
 
 def main():
-    for i in range(3):
-        show_random(True)
+    show_random()
 
 if __name__ == "__main__":
     main()
